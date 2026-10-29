@@ -220,7 +220,9 @@ the verifier cannot tell an evasive non-answer from a compliant one.
   - The raw base does not improve with room (78.8), because it uses the extra tokens to drift.
   - **On 1.5B, Instruct leads at 512 tokens.** Instruct-chat scores 90.0 against the engine's 87.5, so engine −
     Instruct = −2.5 [−10.0, +4.4] and recovery is 85% [40%, 135%]. That comparison runs on the eager-bf16 stack,
-    which depresses 1.5B arithmetic (see Numerics below), so it is pessimistic for the engine, but it is not parity.
+    which depresses 1.5B arithmetic (see Numerics below). It is not parity. (Corrected below: the stack depresses
+    Instruct at least as much as the engine, so this comparison is not pessimistic for the engine. With fp32 scores
+    for all three conditions the gap is −6.9 [−12.5, −1.9].)
   - On these 40 prompts and four programmatic checks, the engine buys essentially all of what post-training buys,
     with 0 changed weights, a 3.0 MB artifact, 0 extra prompt tokens and 2.6× shorter answers.
   - This is not a claim about general assistant quality. The checks do not measure helpfulness, depth, safety or
@@ -273,7 +275,90 @@ the verifier cannot tell an evasive non-answer from a compliant one.
   SDPA Instruct would become the recovery denominator.
   - It moved 0.6 (86.2 → 85.6), so the protocol comparison stays primary.
   - On 1.5B, Instruct-chat did not move (84.4) while the raw base gained 5.6. The 1.5B recovery figures are
-    confounded by numerics and should not be quoted.
+    confounded by numerics and should not be quoted. (Its Composite did not move at 160 tokens; its arithmetic did.
+    See the fp32 follow-up below.)
 - **Throughput.** SDPA is also faster: the raw base runs at 29.5 vs. 26.1 tok/s on 3B, and 48.9 vs. 39.4 on 1.5B. Part
   of the engine's throughput gap to Instruct is the eager attention its Module-4 bias needs, not the hooks. A fused
   attention kernel with an additive bias would remove it; that is untested here.
+
+**Numerics, follow-up (sensitivity run): with fp32 attention scores, the 1.5B gap to Instruct at 512 tokens does not
+close.** The bf16 eager stack had clearly depressed 1.5B-Instruct (+6.9 [+3.1, +10.6] with fp32 scores). For the
+engine the cost is smaller and not resolved (+2.5 [−3.1, +8.1]). This is a labelled sensitivity run; the protocol
+results above stay primary.
+- **What was run.**
+  - `steer_fp32` is `steer_eager` with query and key upcast before Q·Kᵀ, and the scaling, causal mask, Module-4 bias
+    and softmax in fp32. The attention weights are cast back to bf16 for the value matmul.
+  - Unlike SDPA it keeps Module 4, so it can run the engine. Everything else is bf16, as in the protocol.
+  - The coefficients are the frozen ones, tuned on the 1.5B dev set on the bf16 `steer_eager` stack, so on
+    `steer_fp32` the engine runs away from its tuning point. Nothing was re-tuned.
+  - Tags: `test40_fp32attn` (160 tokens) and `test40_512tok_fp32attn` (512 tokens). The protocol logs are untouched.
+- **Checks before any test output** (`scripts/check_fp32_attention.py`, `scripts/check_cache_reproduces.py`):
+  - In an fp32 model, `steer_fp32` is bit-identical to HF eager (max |logit diff| 0). With a Module-4 bias it is
+    bit-identical to `steer_eager`; the bias itself moves the logits by up to 3.7.
+  - In bf16, against fp32 eager over 869 positions, mean KL is 2.7e-2 for `steer_eager`, 7.0e-4 for `steer_fp32`
+    and 6.7e-4 for SDPA. Top-1 agreement is 821, 856 and 859.
+  - The 1.5B raw base solves 8/8 math prompts on it (protocol 3/8, SDPA 8/8).
+  - Conditions 1, 7, 10 and 11 still reproduce their protocol logs byte for byte on both models (on the script's
+    6-prompt check subset).
+  - The new fp32 logs reproduce byte for byte on the same subset: 1.5B conditions 1, 10 and 11 under
+    `PYTHONHASHSEED` 0 and 1, and 3B conditions 10 and 11 under seed 1.
+- **Fixed before any fp32 output existed.**
+  - The verdict compares condition 10 with Instruct-chat at 512 tokens, with raw base, engine and Instruct all on
+    `steer_fp32`.
+  - **Closes** if engine − Instruct ≥ 0, **narrows** if it lies in (−2.5, 0), **stays** if ≤ −2.5. A move inside
+    the ±7-point CI counts as unresolved.
+  - The brief named the existing Instruct logs (`test40_sdpa`, `test40_512tok`) as the reference. Before any run, those
+    logs showed the premise behind that choice ("Instruct moved by 0.0 under SDPA") held for Composite only:
+    - 1.5B-Instruct's text changed on 34/40 prompts between eager and SDPA at 160 tokens;
+    - its math went from 2/8 to 4/8, with the other four answers truncated;
+    - in the eager 512-token log all six math failures end on `eos` with wrong arithmetic ("$50 − $28 = $42",
+      "25 × 4 = 10", "300 / 25 = 30").
+  - So a 1.5B-Instruct run on `steer_fp32` at 512 tokens (conditions 12 chat and bare, 13 chat) was added as the
+    primary reference. The eager `test40_512tok` Instruct is kept as a secondary, continuity row.
+  - At 160 tokens the reference is Instruct on SDPA (`test40_sdpa`).
+- **1.5B, 160 tokens.**
+  - The raw base gains +5.6 [−0.6, +11.2] and lands on SDPA's 81.2; its math goes from 3/8 to 8/8.
+  - The engine gains less: v2.1 +1.9 [−5.0, +8.8] (88.1) and lean +2.5 [−3.1, +8.1] (88.8); math goes from 4/8 to 7/8.
+  - The engine's margin over the raw base shrinks from +10.6 [+2.5, +18.8] to +6.9 [+0.0, +13.8].
+  - Against Instruct on SDPA (84.4) the engine is +3.8 [−3.1, +10.0]. Recovery is not resolved: the denominator,
+    Instruct − raw base, is only +3.1 [−3.8, +10.6].
+- **1.5B, 512 tokens: the verdict is "stays".** On one stack the deficit is now resolved; its widening is a point
+  estimate.
+  - On one stack the raw base scores 78.8, engine v2.1 90.0 and Instruct-chat 96.9.
+  - Engine − Instruct = **−6.9 [−12.5, −1.9]**, against −2.5 [−10.0, +4.4] on the protocol stack.
+  - Recovery is **62% [28%, 90%]**, against 85% [40%, 135%].
+  - The lean engine: −5.6 [−10.6, −0.6], recovery 69% [38%, 96%].
+  - For the first time the CI excludes parity on 1.5B.
+  - The change in the gap itself, paired per prompt, is −4.4 [−11.9, +2.5] (lean: −2.5 [−9.4, +4.4]). The move away
+    from −2.5 is therefore not resolved. What the fp32 run adds is a deficit that excludes zero, not a resolved
+    widening.
+- **Why: Instruct-chat was hurt more than the engine (point estimates), and its change is the only resolved one.**
+  - Instruct-chat gains +6.9 [+3.1, +10.6] (90.0 → 96.9); its math goes from 2/8 to 8/8. Ten prompts improve and none
+    gets worse.
+  - Engine v2.1 gains +2.5 [−3.1, +8.1].
+  - Instruct-bare gains +11.2 (63.8 → 75.0), and Instruct + ban reaches 98.8.
+  - Against the eager 512-token Instruct, the fp32 engine would read 0.0 [−6.2, +5.6] with 100% recovery, i.e.
+    "closes". That is the artefact of comparing a precise-attention engine with a bf16-eager Instruct.
+- **Where the engine still falls short on 1.5B** (512 tokens, fp32 scores):
+  - Instruct leads on format_constraints (96.9 vs. 84.4), reasoning_math (100 vs. 84.4) and code_and_sql (100 vs.
+    93.8). The engine leads on negative_constraints (90.6 vs. 87.5).
+  - Its one remaining math miss is `t_rm_05`. The engine takes a minutes detour ("7:45 PM + 150 minutes = 8:35 PM"),
+    while the fp32 raw base adds directly ("7:45 + 2:30 = 10:15").
+  - The engine coefficients were tuned on the bf16 stack. Re-tuning them on fp32 scores would be a new dev-set phase.
+    Whether it would recover some of the gap is untested.
+- **3B check** (160 tokens, engine conditions only):
+  - v2.1 −0.6 [−2.5, +1.2] (94.4 → 93.8), lean +0.0 [−1.9, +1.9] (95.6); 19–20 of 40 responses are byte-identical.
+  - The only math flip is `t_rm_05` again ("10:30").
+  - The 3B engine is unaffected, as before. Not re-checked: 3B Instruct and raw base on fp32 scores at 512 tokens, so
+    the 3B parity claim has not been repeated on a precise stack. 3B Instruct is already 8/8 on math at 512 tokens on
+    eager.
+- **Corrections to the notes above.**
+  - "On 1.5B, Instruct-chat did not move (84.4)" is true of its Composite at 160 tokens only.
+  - "Pessimistic for the engine" (1.5B at 512 tokens) points the wrong way. The eager stack depresses every 1.5B
+    condition, but not equally. At 512 tokens it costs Instruct 6.9 [3.1, 10.6] points and the engine 2.5
+    [−3.1, 8.1]. Their difference is not resolved (−4.4 [−11.9, +2.5]), but its point estimate says the
+    protocol-stack 1.5B comparison flattered the engine, not that it was pessimistic.
+  - The 3B rule (Instruct moved 0.6 at 160 tokens) stands as it was defined. A stable 160-token Composite turned out
+    to be a weak test on 1.5B.
+- **Throughput.** fp32 scores cost speed. The 1.5B raw base runs at 33.4 tok/s against 39.4 on the protocol stack, and
+  engine v2.1 at 29.7 against 37.1 (160 tokens).

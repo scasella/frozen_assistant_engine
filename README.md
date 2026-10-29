@@ -63,13 +63,18 @@ comparison is the 512-token rerun:
 - **Parity with post-training on these checks.** At 512 tokens, post-training gains +15.6 [+8.8, +22.5] over the raw
   base. The engine is within noise of Instruct (+1.9 [−1.9, +5.6]) and recovers **112% [87%, 150%]** of that gain.
   The checks cover starting, stopping, rule-following and not looping, not helpfulness, safety or multi-turn quality.
-  On 1.5B, Instruct leads at 512 tokens (90.0 vs. 87.5; recovery 85% [40%, 135%]).
+  On 1.5B, Instruct leads at 512 tokens (90.0 vs. 87.5; recovery 85% [40%, 135%]). A sensitivity run with fp32
+  attention scores for all three conditions puts it at 90.0 vs. 96.9: −6.9 [−12.5, −1.9], which excludes parity, and
+  recovery 62% [28%, 90%]. The change from −2.5 is itself not resolved (−4.4 [−11.9, +2.5]).
 - **Complementary, not only a substitute.** Bolting the engine's lexical ban onto Instruct, with no re-tuning, raises
   negative-constraint compliance from 37.5% to 87.5% and adds +3.1 [+0.6, +6.2] at 512 tokens.
 - **Minimal distortion.** The KL column excludes the 8 prompts where the ban deliberately suppresses a word. There the
   engine moves the base model's next-token distribution 40× less than post-training does, with 97% top-1 agreement.
-- **Numerics caveat.** Module 4 needs eager attention, and in bf16 eager attention breaks Qwen2.5-1.5B arithmetic (3/8
-  math vs. 8/8 under SDPA). All 1.5B levels in this repository are pessimistic for that reason; 3B is unaffected.
+- **Numerics caveat.** Module 4 needs eager attention, and in bf16 eager attention breaks Qwen2.5-1.5B arithmetic, base
+  and Instruct alike (raw base 3/8 math vs. 8/8 under SDPA or fp32 scores). All 1.5B levels in this repository are
+  depressed, but not equally. At 512 tokens, fp32 scores lift Instruct by +6.9 [+3.1, +10.6] and the engine by +2.5
+  [−3.1, +8.1]. So the protocol-stack 1.5B comparison is not pessimistic for the engine; it more likely flatters it.
+  The 3B engine is unaffected (−0.6 and +0.0 at 160 tokens).
 
 Details, CIs, the SDPA and 512-token sensitivity tables, and verbatim Instruct cases are in
 [RESULTS.md §7–8](RESULTS.md).
@@ -84,7 +89,8 @@ Details, CIs, the SDPA and 512-token sensitivity tables, and verbatim Instruct c
   (3B) and from 77.5% to 20% (1.5B). The engine's decaying schedule keeps it at 80%.
 - **On 1.5B the picture is weaker.** Condition 10 is the best there too (86.2), but only its margin over the raw base is
   resolved (+10.6 [+2.5, +18.8]). Over the Phase-1 engine it is +1.9 [−5.0, +8.1]. All 1.5B levels are depressed by
-  the bf16 eager-attention numerics described above.
+  the bf16 eager-attention numerics described above, and the raw base more than the engine. With fp32 scores, the
+  margin over the raw base is +6.9 [+0.0, +13.8] at 160 tokens.
 - **Small samples.** Coefficients were tuned on 15 dev prompts, where one prompt equals 1.7 Composite points. Condition
   10's dev margin over conditions 7 and 9 was a single prompt.
 - **Verifier blind spots** are documented in [RESULTS.md](RESULTS.md):
@@ -274,8 +280,13 @@ The repository records three rounds, all on the same frozen checkpoints, calibra
 Corrections recorded along the way (details in [RESULTS.md](RESULTS.md)):
 - **bf16 eager attention costs Qwen2.5-1.5B its arithmetic** (found in Phase 4). Module 4 needs eager attention, which
   in bf16 rounds pre-softmax scores. Under it the 1.5B raw base solves 3/8 math prompts, against 8/8 under SDPA
-  (Composite 75.6 vs. 81.2). The effect is the same for every condition, so 1.5B comparisons stay internally fair, but
-  1.5B absolute levels are depressed. 3B is unaffected (8/8 under both).
+  (Composite 75.6 vs. 81.2). 3B is unaffected (8/8 under both).
+  - An earlier version of this note said the effect was the same for every condition. A follow-up with fp32 scores
+    and Module 4 kept (`steer_fp32`, tags `test40_fp32attn` and `test40_512tok_fp32attn`) shows it is not.
+  - At 512 tokens it costs 1.5B-Instruct 6.9 [3.1, 10.6] points (math 2/8 → 8/8) and the engine 2.5
+    [−3.1, 8.1].
+  - On a matched fp32 stack, Instruct leads the 1.5B engine by 6.9 [1.9, 12.5] at 512 tokens.
+  - The protocol results stay primary; the coefficients were tuned on the bf16 stack.
 - **Hash-seed bug.** The projection order in conditions 9 and 10 originally depended on the Python hash seed. It is now
   sorted by token id. Condition 9 was re-tuned and re-generated, and the earlier non-reproducible logs are kept as
   `results/*/test40/9_engine_v2_full.nondeterministic_order.jsonl.bak`.

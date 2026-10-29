@@ -9,6 +9,6 @@ commands. The short version:
   After engine changes, run `scripts/check_cache_reproduces.py`.
 - Iterate banned token ids in sorted order; no hash-order dependence anywhere.
 - `eval/verifiers.py` is frozen; reports re-score from logged text.
-- All benchmark conditions run bf16 on `steer_eager` attention; SDPA and 512-token runs are sensitivity tags only
-  (`test40_sdpa`, `test40_512tok`).
+- All benchmark conditions run bf16 on `steer_eager` attention; SDPA, fp32-score attention and 512-token runs are
+  sensitivity tags only (`test40_sdpa`, `test40_fp32attn`, `test40_512tok`, `test40_512tok_fp32attn`).
 - Verify with `.venv/bin/python -m pytest -q`, and regenerate `RESULTS.md` with `eval/report.py` (see AGENTS.md).

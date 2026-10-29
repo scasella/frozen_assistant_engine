@@ -332,7 +332,8 @@ Given 512 tokens, Instruct ends on its own on 37 of 40 prompts, and post-trainin
 **+15.6 [+8.8, +22.5]**. The engine scores 96.2 with no cap hits. Engine − Instruct is **+1.9 [−1.9, +5.6]**, and
 the engine recovers **112% [87%, 150%]** of post-training's gain. The honest summary is *parity* on this benchmark,
 with answers 2.6× shorter. On 1.5B it is not parity: at 512 tokens 1.5B-Instruct leads, 90.0 against 87.5 (engine −
-Instruct −2.5 [−10.0, +4.4], recovery 85% [40%, 135%]), on a stack that handicaps 1.5B arithmetic (§7.5).
+Instruct −2.5 [−10.0, +4.4], recovery 85% [40%, 135%]). That stack handicaps 1.5B arithmetic, Instruct's included.
+With fp32 attention scores for all three conditions, the gap is −6.9 [−12.5, −1.9] (§7.5).
 
 This benchmark measures four things: starting an answer, stopping cleanly, following machine-checkable rules, and not
 looping. It says nothing about helpfulness, depth, safety, refusals or multi-turn behaviour, where post-training does
@@ -374,12 +375,33 @@ inject its bias, and in bf16 the eager path rounds pre-softmax scores. HF's own 
 wrong digits.
 
 Under SDPA the 1.5B raw base solves **8/8** math prompts instead of 3/8, and its Composite rises from 75.6 to 81.2.
-Every 1.5B number in this project, the v2.1.0 release included, ran on that stack. Comparisons among them remain fair,
-but their level is depressed. 3B is unaffected: 8/8 under both stacks.
+Every 1.5B number in this project, the v2.1.0 release included, ran on that stack, so their level is depressed. 3B is
+unaffected: 8/8 under both stacks.
 
 Before rerunning Instruct on SDPA we fixed a rule: if 3B Instruct moved by more than 2 points, the SDPA run would
-become the reference. It moved 0.6, so the matched-stack comparison above stands. The fix for the engine, a fused
-attention kernel with an additive bias, is future work.
+become the reference. It moved 0.6, so the matched-stack comparison above stands.
+
+We then ran the engine itself without the rounding. `steer_fp32` keeps the eager path and the Module-4 bias, but
+computes the scores, mask, bias and softmax in fp32.
+- It is as close to an fp32 forward pass as SDPA is, and the 1.5B raw base solves 8/8 math prompts on it.
+- The coefficients stayed frozen, as tuned on the bf16 stack.
+- We fixed the verdict rule first. We also added a 1.5B-Instruct run on the same stack: the logs already showed
+  1.5B-Instruct breaking arithmetic under eager attention too ("$50 − $28 = $42"). Its Composite had not moved at 160
+  tokens only because truncation hid the errors.
+
+The result went against the engine. At 512 tokens, fp32 scores lift Instruct-chat from 90.0 to **96.9** (math 2/8 →
+8/8, no prompt worse), and the engine only from 87.5 to 90.0.
+- On one stack, engine − Instruct is **−6.9 [−12.5, −1.9]**, and recovery is **62% [28%, 90%]**.
+- The 1.5B gap does not close. On the fp32 stack the deficit excludes zero, although its change from −2.5 is not
+  itself resolved (−4.4 [−11.9, +2.5]).
+- We had written that the stack made every 1.5B level pessimistic. That points the wrong way for the comparison with
+  Instruct. The stack cost Instruct +6.9 [+3.1, +10.6] and the engine +2.5 [−3.1, +8.1], so the protocol comparison
+  more likely flattered the engine.
+- The 3B engine does not move (−0.6 and +0.0 at 160 tokens). We have not repeated the 3B Instruct comparison at 512
+  tokens on fp32 scores.
+
+fp32 scores also cost about 20% of decode speed (1.5B engine 29.7 vs. 37.1 tok/s). A fused attention kernel with an
+additive bias would avoid both the rounding and the slowdown; it is future work.
 
 ## 8. Caveats we would want a reviewer to raise
 
@@ -387,8 +409,9 @@ attention kernel with an additive bias, is future work.
   dev advantage over conditions 7 and 9 was one prompt, so most of its test gain was not visible during tuning.
 - **One model family, greedy decoding only.** Nothing here is shown for other architectures or sampling. The only
   post-trained models tested are Qwen2.5-Instruct, and only with the lexical operator (§7.4).
-- **The protocol stack depresses 1.5B.** bf16 eager attention costs the 1.5B model its arithmetic (§7.5); every
-  1.5B level is pessimistic.
+- **The protocol stack depresses 1.5B.** bf16 eager attention costs the 1.5B model its arithmetic (§7.5). Every 1.5B
+  level is depressed, Instruct's at least as much as the engine's, so the 1.5B comparison with Instruct is not
+  pessimistic for the engine.
 - **The token budget matters.** At 160 tokens the comparison with Instruct is dominated by truncation (§7.2). The
   512-token rerun was planned after seeing that, and it is the fair comparison.
 - **The verifier has blind spots.**

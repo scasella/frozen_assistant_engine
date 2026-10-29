@@ -243,7 +243,9 @@ Conditions 8 and 9 build on `7_engine_v2_hinge_erase`, the better of x5 / 7 on t
 - **Frozen verifiers.** The verifiers were written for base-model failure modes and were not changed for Instruct outputs. In particular, CleanStop fails answers that hit the 160-token cap mid-sentence, which penalises verbose answers.
 - **Sensitivity runs** (separate tags, never mixed with the protocol logs):
   - `test40_512tok` reruns conditions 1, 10, 11, 12 and 13 (chat) with `max_new_tokens = 512`. It was planned after seeing Instruct's 160-token truncations and before any 512-token output existed. Its latencies are not comparable: part of it ran alongside the 1.5B KL job.
-  - `test40_sdpa` reruns conditions 1, 2, 12 and 13 (chat) on HF's SDPA attention. The engine conditions cannot run there: SDPA has no slot for the Module-4 bias, and `AssistantEngine` refuses `pin_attention` without `steer_eager`.
+  - `test40_sdpa` reruns conditions 1, 2, 12 and 13 (chat) on HF's SDPA attention. The engine conditions cannot run there: SDPA has no slot for the Module-4 bias, and `AssistantEngine` refuses `pin_attention` without a `steer_*` attention.
+  - `test40_fp32attn` and `test40_512tok_fp32attn` rerun conditions 1, 2, 10 and 11 on `steer_fp32`: `steer_eager` with query and key upcast before Q·Kᵀ, and the scaling, causal mask, Module-4 bias and softmax in fp32 (the weights are cast back to bf16 for the value matmul). It keeps Module 4, so it measures what the bf16 score rounding costs the engine itself. The coefficients are the frozen ones, tuned on the 1.5B dev set on the bf16 `steer_eager` stack, so the engine runs off its tuning point there; nothing was re-tuned. Checks before any test output (`scripts/check_fp32_attention.py`): in fp32 it is bit-identical to HF eager without a bias and to `steer_eager` with one; in bf16 its logits sit as close to the fp32 reference as SDPA's; the 1.5B raw base solves 8/8 math prompts on it.
+  - The fp32 recovery rows take Instruct from `test40_sdpa` at 160 tokens (precise attention, same budget). At 512 tokens they use a 1.5B Instruct run on `steer_fp32` (conditions 12 and 13 chat, 12 bare), added because the eager stack also costs 1.5B Instruct its arithmetic. Its Composite did not move under SDPA at 160 tokens, but its math went from 2/8 to 4/8 with the other four truncated. The eager 512-token Instruct is listed too, for continuity. The references and the verdict rule were fixed before any fp32 output existed. 3B ran conditions 10 and 11 at 160 tokens only, as a check, so it has no fp32 recovery rows.
 - **Clean-token KL** (`eval/alignment_tax.py`). Each condition is teacher-forced along the same clean answers; engine conditions replay them one token per pass with the full per-step schedule, including the EOS boosts and the lexical ban. The reference is the raw base in the bare frame, decoded step by step. The answers are URIAL-teacher text in the base model's style, not Instruct-style text.
 
 ## 4. Calibration diagnostics (per target layer)
@@ -1023,7 +1025,7 @@ Step-by-step reasoning process: x + 7 = 19 x + 7 - 7 = 19 - 7 x = 12 3x = 3 * 12
 - **Weights changed / size.** The engine edits no weights; its artifact is the calibration file read by the hooks. The Instruct row compares every bf16 tensor of the two public checkpoints (`scripts/weight_delta.py`).
 - **Clean-token KL.** Mean D_KL(P_raw ‖ P_condition) in nats per token, teacher-forced at steps t > 4 on URIAL's clean answers to the test prompts (`eval/alignment_tax.py`; the calibration-answer version is in the detail table below). *no-negation* drops the 8 prompts with a parsed negation, where the lexical ban suppresses words the teacher answer uses by design. Lower means the condition leaves the base model's predictions on good assistant text more intact. It is a distance, not a quality score: Instruct is *meant* to move the distribution. The single-pass vs. step-by-step numerical floor of the raw base is 0.0007 nats.
 - **Composite, 512 tokens** reruns the same prompts with a 512-token budget (tag `test40_512tok`). Instruct writes longer answers, and the 160-token cap cuts many of them mid-sentence, which fails CleanStop.
-- **Stack.** Every row ran in bf16 on the steer_eager (HF-eager) attention, which Module 4 needs. The SDPA rows of the sensitivity table quantify what that costs the attention-agnostic conditions.
+- **Stack.** Every row ran in bf16 on the steer_eager (HF-eager) attention, which Module 4 needs. The SDPA rows of the sensitivity table quantify what that costs the attention-agnostic conditions, and the fp32-score rows what it costs the engine (Module 4 included).
 - **tok/s** for conditions 2, 7, 10, x9 and 11 is the same-session benchmark; other rows are from their logs.
 - **One-off cost** for Instruct is the Qwen2.5 technical report's description of post-training (arXiv 2412.15115); the engine's is measured wall time on the M4 Pro (trajectory generation and state collection).
 
@@ -1052,15 +1054,32 @@ Stop reasons (eos / stop_string / max_tokens): `12_official_instruct_bare` 10/4/
 
 ### Sensitivity of the post-training comparison
 
-| Condition | Composite, protocol: eager attention, 160 tokens | Composite, SDPA attention, 160 tokens | Composite, eager attention, 512 tokens | hit token cap, eager attention, 160 tokens | hit token cap, SDPA attention, 160 tokens | hit token cap, eager attention, 512 tokens |
+Composite, with the number of answers that hit the token cap in brackets:
+
+| Condition | protocol: eager attention, 160 tokens | SDPA attention, 160 tokens | eager attention, 512 tokens | fp32-score attention, 160 tokens | fp32-score attention, 512 tokens |
+|---|---|---|---|---|---|
+| `1_raw_base` | 75.6 (9/40) | 81.2 (10/40) | 73.8 (7/40) | 81.2 (11/40) | 78.8 (8/40) |
+| `2_raw_base_plus_stops` | 80.6 (4/40) | 83.8 (7/40) | – | 83.8 (8/40) | 83.8 (1/40) |
+| `10_engine_v2_1` | 86.2 (5/40) | – | 87.5 (3/40) | 88.1 (7/40) | 90.0 (3/40) |
+| `11_engine_v2_2_lean` | 86.2 (6/40) | – | 86.9 (4/40) | 88.8 (6/40) | 91.2 (2/40) |
+| `12_official_instruct_chat` | 84.4 (14/40) | 84.4 (16/40) | 90.0 (1/40) | – | 96.9 (0/40) |
+| `12_official_instruct_bare` | 71.2 (26/40) | 78.1 (23/40) | 63.8 (21/40) | – | 75.0 (14/40) |
+| `13_instruct_plus_orth_ban_chat` | 85.0 (15/40) | 86.9 (16/40) | 91.9 (1/40) | – | 98.8 (0/40) |
+
+**fp32-score attention vs. the protocol stack** (same prompts, same frozen coefficients; Δ in Composite points with a 95% paired-bootstrap CI; math = `math_answer` checks passed):
+
+| Condition | Budget | Composite, eager bf16 scores | Composite, fp32 scores | Δ | Math solved | Identical responses |
 |---|---|---|---|---|---|---|
-| `1_raw_base` | 75.6 | 81.2 | 73.8 | 9/40 | 10/40 | 7/40 |
-| `2_raw_base_plus_stops` | 80.6 | 83.8 | – | 4/40 | 7/40 | – |
-| `10_engine_v2_1` | 86.2 | – | 87.5 | 5/40 | – | 3/40 |
-| `11_engine_v2_2_lean` | 86.2 | – | 86.9 | 6/40 | – | 4/40 |
-| `12_official_instruct_chat` | 84.4 | 84.4 | 90.0 | 14/40 | 16/40 | 1/40 |
-| `12_official_instruct_bare` | 71.2 | 78.1 | 63.8 | 26/40 | 23/40 | 21/40 |
-| `13_instruct_plus_orth_ban_chat` | 85.0 | 86.9 | 91.9 | 15/40 | 16/40 | 1/40 |
+| `1_raw_base` | 160 tokens | 75.6 | 81.2 | +5.6 [-0.6, +11.2] | 3/8 → 8/8 | 10/40 |
+| `2_raw_base_plus_stops` | 160 tokens | 80.6 | 83.8 | +3.1 [-2.5, +8.1] | 3/8 → 8/8 | 11/40 |
+| `10_engine_v2_1` | 160 tokens | 86.2 | 88.1 | +1.9 [-5.0, +8.8] | 4/8 → 7/8 | 6/40 |
+| `11_engine_v2_2_lean` | 160 tokens | 86.2 | 88.8 | +2.5 [-3.1, +8.1] | 4/8 → 7/8 | 9/40 |
+| `1_raw_base` | 512 tokens | 73.8 | 78.8 | +5.0 [-1.9, +11.2] | 3/8 → 8/8 | 10/40 |
+| `10_engine_v2_1` | 512 tokens | 87.5 | 90.0 | +2.5 [-3.1, +8.1] | 4/8 → 7/8 | 6/40 |
+| `11_engine_v2_2_lean` | 512 tokens | 86.9 | 91.2 | +4.4 [-1.2, +10.6] | 4/8 → 7/8 | 9/40 |
+| `12_official_instruct_chat` | 512 tokens | 90.0 | 96.9 | +6.9 [+3.1, +10.6] | 2/8 → 8/8 | 7/40 |
+| `12_official_instruct_bare` | 512 tokens | 63.8 | 75.0 | +11.2 [+1.2, +21.9] | 6/8 → 8/8 | 4/40 |
+| `13_instruct_plus_orth_ban_chat` | 512 tokens | 91.9 | 98.8 | +6.9 [+2.5, +11.9] | 2/8 → 8/8 | 7/40 |
 
 | Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |
 |---|---|---|---|---|---|
@@ -1076,6 +1095,18 @@ Stop reasons (eos / stop_string / max_tokens): `12_official_instruct_bare` 10/4/
 | eager attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | -10.0 [-20.0, +0.0] | +23.8 [+13.1, +34.4] | undefined (Instruct ≤ raw base) |
 | eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +16.2 [+9.4, +23.1] | -3.1 [-10.0, +3.1] | **81%** [40%, 125%] |
 | eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -10.0 [-20.0, +0.0] | +23.1 [+11.9, +34.4] | undefined (Instruct ≤ raw base) |
+| fp32-score attention, 160 tokens; Instruct from `test40_sdpa` | `10_engine_v2_1` | `12_official_instruct_chat` | +3.1 [-3.8, +10.6] | +3.8 [-3.1, +10.0] | not resolved (point 220%; denominator ≤ 0 in 23% of resamples) |
+| fp32-score attention, 160 tokens; Instruct from `test40_sdpa` | `10_engine_v2_1` | `12_official_instruct_bare` | -3.1 [-8.8, +3.1] | +10.0 [+3.8, +16.9] | undefined (Instruct ≤ raw base) |
+| fp32-score attention, 160 tokens; Instruct from `test40_sdpa` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +3.1 [-3.8, +10.6] | +4.4 [-1.9, +10.6] | not resolved (point 240%; denominator ≤ 0 in 23% of resamples) |
+| fp32-score attention, 160 tokens; Instruct from `test40_sdpa` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -3.1 [-8.8, +3.1] | +10.6 [+4.4, +16.9] | undefined (Instruct ≤ raw base) |
+| fp32-score attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +18.1 [+11.2, +25.0] | -6.9 [-12.5, -1.9] | **62%** [28%, 90%] |
+| fp32-score attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | -3.8 [-13.1, +5.6] | +15.0 [+5.6, +24.4] | undefined (Instruct ≤ raw base) |
+| fp32-score attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +18.1 [+11.2, +25.0] | -5.6 [-10.6, -0.6] | **69%** [38%, 96%] |
+| fp32-score attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -3.8 [-13.1, +5.6] | +16.2 [+6.9, +25.6] | undefined (Instruct ≤ raw base) |
+| fp32-score attention, 512 tokens; Instruct from `test40_512tok` | `10_engine_v2_1` | `12_official_instruct_chat` | +11.2 [+4.4, +18.1] | +0.0 [-6.2, +5.6] | **100%** [50%, 189%] |
+| fp32-score attention, 512 tokens; Instruct from `test40_512tok` | `10_engine_v2_1` | `12_official_instruct_bare` | -15.0 [-25.6, -5.0] | +26.2 [+16.2, +36.2] | undefined (Instruct ≤ raw base) |
+| fp32-score attention, 512 tokens; Instruct from `test40_512tok` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +11.2 [+4.4, +18.1] | +1.2 [-3.8, +6.2] | **111%** [69%, 191%] |
+| fp32-score attention, 512 tokens; Instruct from `test40_512tok` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -15.0 [-25.6, -5.0] | +27.5 [+18.1, +37.5] | undefined (Instruct ≤ raw base) |
 
 ### Clean-token KL distortion in detail
 

@@ -27,7 +27,7 @@ class LoadedModel:
     n_heads: int
     eos_token_id: int
     eos_ids: tuple[int, ...] = ()   # every id that ends a turn (generation_config); base Qwen2.5: (eos_token_id,)
-    attn: str = "steer_eager"       # steer_eager (all benchmark conditions) | sdpa (numerics sensitivity only)
+    attn: str = "steer_eager"       # steer_eager (all benchmark conditions) | steer_fp32, sdpa (numerics sensitivity only)
 
     @property
     def slug(self) -> str:
@@ -73,19 +73,21 @@ def find_decoder_layers(model: nn.Module) -> nn.ModuleList:
 
 def load_model(name: str, device: str | None = None, dtype: str = "bfloat16", attn: str = "steer_eager") -> LoadedModel:
     """``attn="sdpa"`` keeps HF's fused attention (no Module-4 bias). In bf16 the eager path rounds attention scores to
-    bf16 before the softmax, which measurably hurts Qwen2.5-1.5B arithmetic; sdpa exists to quantify that."""
-    if attn not in ("steer_eager", "sdpa"):
+    bf16 before the softmax, which measurably hurts Qwen2.5-1.5B arithmetic; sdpa exists to quantify that.
+    ``attn="steer_fp32"`` is ``steer_eager`` with fp32 pre-softmax scores, so the engine (Module 4 included) can be
+    measured without that rounding."""
+    if attn not in ("steer_eager", "steer_fp32", "sdpa"):
         raise ValueError(f"unknown attention implementation {attn!r}")
     dev = pick_device(device)
     torch_dtype = _DTYPES[dtype]
     tokenizer = AutoTokenizer.from_pretrained(name)
     model = AutoModelForCausalLM.from_pretrained(name, dtype=torch_dtype,
-                                                 attn_implementation="eager" if attn == "steer_eager" else "sdpa")
+                                                 attn_implementation="sdpa" if attn == "sdpa" else "eager")
     model.to(dev)
     model.eval()
     model.requires_grad_(False)
-    if attn == "steer_eager":
-        install_steerable_attention(model)
+    if attn != "sdpa":
+        install_steerable_attention(model, attn)
 
     cfg = model.config
     eos = tokenizer.eos_token_id if tokenizer.eos_token_id is not None else cfg.eos_token_id

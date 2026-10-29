@@ -7,7 +7,7 @@ change to engine/ or eval/conditions.py that could touch a code path an existing
 
 ``--set key=value`` regenerates a condition with engine-config overrides and compares against *that condition's* log,
 e.g. ``--conditions x9_v2_1_minus_anti_echo --set sibling_fast=true`` checks that the sync-free projection reproduces
-x9 byte for byte. ``--timing`` prints same-session decode speed (run the conditions you compare in one invocation).
+x9 byte for byte. ``--attn steer_fp32 --tag test40_fp32attn`` checks a sensitivity log. ``--timing`` prints same-session decode speed (run the conditions you compare in one invocation).
 """
 
 from __future__ import annotations
@@ -34,12 +34,14 @@ def main() -> int:
     ap.add_argument("--conditions", nargs="+", required=True)
     ap.add_argument("--n-prompts", type=int, default=6, help="category-balanced subset of the test prompts")
     ap.add_argument("--tag", default="test40")
+    ap.add_argument("--attn", default="steer_eager", choices=["steer_eager", "steer_fp32", "sdpa"],
+                    help="attention stack of the logs under --tag (e.g. steer_fp32 for a *_fp32attn tag)")
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE", help="engine-config overrides")
     ap.add_argument("--timing", action="store_true", help="print tok/s of each regenerated condition")
     args = ap.parse_args()
     overrides = {k: _value(v) for k, v in (kv.split("=", 1) for kv in args.set)}
 
-    lm = load_model(args.model)
+    lm = load_model(args.model, attn=args.attn)
     art = SteeringArtifact.load(ROOT / "artifacts" / lm.slug / "calib80" / "calibration.pt")
     prompts = load_prompts(ROOT / "data" / "test_prompts.json", args.n_prompts)
     hp = load_hparams(ROOT / "configs" / "hparams.json")

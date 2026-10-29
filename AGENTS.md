@@ -12,7 +12,7 @@ logged generations. The rules below keep those numbers honest. Read them before 
 | `engine/prompts.py` | The `Question: …\nAnswer:` frame, the 768-token URIAL prefix, stop strings, and the four trap templates used in calibration. |
 | `engine/calibration.py` | Stage 1: teacher and raw trajectories (cached in `trajectories.json`). Stage 2: teacher-forced hidden-state statistics (cached in `states.pt`). Stage 3: closed-form solves on CPU float64 (mean differences, SVD, ridge, p99 thresholds). |
 | `engine/artifact.py` | `SteeringArtifact`, the `.pt` container for all calibrated tensors, plus defaults for fields added later. |
-| `engine/hooks.py` | All runtime interventions: the `steer_eager` attention function (Module 4 bias and the recorder), `EngineConfig`, and `AssistantEngine`. The engine covers the residual hooks (lifecycle, erasure, hinge, boundary window, stop checks), the pre-LM-head unembedding projection (plain or sibling-orthogonal) and the anti-echo guard. |
+| `engine/hooks.py` | All runtime interventions: the `steer_eager` attention function (Module 4 bias and the recorder), its fp32-score sibling `steer_fp32` (numerics sensitivity only), `EngineConfig`, and `AssistantEngine`. The engine covers the residual hooks (lifecycle, erasure, hinge, boundary window, stop checks), the pre-LM-head unembedding projection (plain or sibling-orthogonal) and the anti-echo guard. |
 | `engine/negation.py` | Deterministic negation parser (clause spans, targets, echo words) and `forbidden_token_ids`, which is **sorted by token id**. `ban_morphology="stem"` (opt-in, demo only) adds every token that starts a word with the target's stem and the sub-word completion guard (`stem_of`, `continuation_token_ids`, `stem_completions`). |
 | `engine/stream.py` | `stream_generate`: `generate` token by token (same arithmetic), yielding per-token events, optional exact step-KL against the unsteered model, and engine hooks that are live only during the decoder's own forward passes (`AssistantEngine.suspend` / `resume`), so decoders can be interleaved on one model. |
 | `engine/generator.py` | `encode_prompt` (instruction and negation token positions), `encode_chat_prompt` (the checkpoint's chat template), a greedy KV-cached decoding loop with stop strings, every turn-ending EOS id and per-step engine state, and `teacher_force` (the same loop along a fixed continuation, for KL measurements). |
@@ -30,10 +30,10 @@ logged generations. The rules below keep those numbers honest. Read them before 
 | `results/<model>-Instruct/test40/` | Conditions 12–13 on the official post-trained checkpoint (same prompts, loop and verifiers), plus `weight_delta.json`. |
 | `results/<model>/alignment_tax.json`, `results/<model>/speed_bench.json`, `results/lean_equivalence_checks.txt` | KL measurements, the same-session speed benchmark, and the byte-identity evidence for the v2.2 lean execution path. |
 | `results/Qwen__Qwen2.5-1.5B/dev15/` | Dev-set run of conditions 10 and 11 (a sanity check of the lean mechanism set on dev; nothing was selected from it). |
-| `results/<model>[-Instruct]/test40_sdpa/`, `.../test40_512tok/` | Sensitivity runs: HF SDPA attention (engine-free conditions only) and a 512-token budget. Never mix them with `test40`. |
+| `results/<model>[-Instruct]/test40_sdpa/`, `.../test40_512tok/`, `.../test40_fp32attn/`, `.../test40_512tok_fp32attn/` | Sensitivity runs: HF SDPA attention (engine-free conditions only), a 512-token budget, and `steer_fp32` attention (fp32 pre-softmax scores, Module 4 included) at 160 and 512 tokens. Never mix them with `test40`. |
 | `results/*/test40/*.nondeterministic_order.jsonl.bak`, `results/Qwen__Qwen2.5-1.5B/tuning_log_with_nondeterministic_9_10.jsonl.bak` | Withdrawn logs from before the projection-order fix, kept as evidence. Never load them as results. |
 | `results/Qwen__Qwen2.5-1.5B/smoke10_defaults/` | Phase-1 smoke run with the pre-fix Module 2, kept for provenance; its `analysis_notes.md` marks it superseded. |
-| `scripts/` | `sanity_check.py` (`steer_eager` must equal eager attention), `resolve_calibration.py`, `check_cache_reproduces.py` (also `--set key=value` to check an execution-path change against an existing log), `bench_speed.py` (interleaved same-session tok/s), `weight_delta.py` (base vs. Instruct tensors), `check_links.py`. |
+| `scripts/` | `sanity_check.py` (`steer_eager` must equal eager attention), `check_fp32_attention.py` (`steer_fp32` pre-flight: fp32 equivalence, bf16 distance to fp32, 1.5B math), `resolve_calibration.py`, `check_cache_reproduces.py` (also `--set key=value` to check an execution-path change against an existing log, `--attn` for a sensitivity tag), `bench_speed.py` (interleaved same-session tok/s), `weight_delta.py` (base vs. Instruct tensors), `check_links.py`. |
 | `tests/` | Model-free pytest suite (`test_demo.py` exercises the studio API on the cached logs). |
 | `demo/` | The live studio: `server.py` (FastAPI, SSE arena, model manager), `data.py` (benchmark data through `eval/report.py`'s loaders), `static/` (vanilla HTML/CSS/JS, no build step). It only *reads* `results/`. |
 | `scripts/verify_demo.py`, `results/demo_verification.json` | End-to-end studio check: API completeness, arena columns = cached logs (interleaved and alone), telemetry is read-only, the `t_ng_04` stem-ban assertion, and an informational v2.3 negation sweep. |
@@ -74,7 +74,10 @@ logged generations. The rules below keep those numbers honest. Read them before 
    - `steer_eager` must stay bit-identical to HF eager attention when no bias is set (`scripts/sanity_check.py`).
    - Eager attention in bf16 rounds the pre-softmax scores, which costs Qwen2.5-1.5B its arithmetic (3/8 math vs. 8/8
      under SDPA). Every benchmark condition shares this stack. `--attn sdpa` exists only for sensitivity runs: it
-     needs a tag ending in `_sdpa`, and the engine refuses Module 4 (`pin_attention`) without `steer_eager`.
+     needs a tag ending in `_sdpa`, and the engine refuses Module 4 (`pin_attention`) without a `steer_*` attention.
+   - `--attn steer_fp32` (fp32 pre-softmax scores, Module 4 kept) is also sensitivity-only: it needs a tag ending in
+     `_fp32attn`, and `steer_eager` runs may not write into `_sdpa` / `_fp32attn` tags. Never edit
+     `steer_eager_attention_forward` to get fp32 scores; it must stay bit-identical to HF eager.
    - On MPS, move to CPU *before* upcasting: `.to("cpu").to(torch.float64)`. MPS has no float64.
    - Solves run on CPU float64.
    - `scripts/resolve_calibration.py` asserts that a re-solve leaves every pre-existing artifact tensor bit-identical.
@@ -106,6 +109,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requiremen
 
 # model-dependent checks
 .venv/bin/python scripts/sanity_check.py --model Qwen/Qwen2.5-1.5B
+.venv/bin/python scripts/check_fp32_attention.py --model Qwen/Qwen2.5-1.5B   # before any *_fp32attn run
 .venv/bin/python scripts/check_cache_reproduces.py --model Qwen/Qwen2.5-1.5B --conditions 6_full_assistant_engine 10_engine_v2_1
 
 # calibration: re-solve from a local states.pt (no forward passes), or recalibrate (reuses cached trajectories)

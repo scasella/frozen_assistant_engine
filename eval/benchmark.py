@@ -21,6 +21,20 @@ from .report import write_report
 from .verifiers import score_response
 
 ROOT = Path(__file__).resolve().parents[1]
+# Sensitivity attention stacks and the tag suffix their logs must carry. The cache guard compares engine configs only,
+# so attention implementations must never share a log.
+ATTN_TAG_SUFFIX = {"sdpa": "_sdpa", "steer_fp32": "_fp32attn"}
+
+
+def results_tag(attn: str, tag: str | None, n_prompts: int) -> str:
+    """The results sub-directory for this run; refuses a tag that does not match the attention stack."""
+    suffix = ATTN_TAG_SUFFIX.get(attn, "")
+    tag = tag or f"test{n_prompts}{suffix}"
+    if suffix and not tag.endswith(suffix):
+        raise SystemExit(f"--attn {attn} runs must use a tag ending in {suffix}")
+    if not suffix and tag.endswith(tuple(ATTN_TAG_SUFFIX.values())):
+        raise SystemExit(f"--attn {attn} must not write into the sensitivity tag {tag}")
+    return tag
 
 
 def get_artifact(lm, n_calib: int | None, recalibrate: bool, calib_cfg: CalibConfig) -> tuple[SteeringArtifact, Path]:
@@ -43,8 +57,9 @@ def main() -> None:
     ap.add_argument("--model", default="Qwen/Qwen2.5-3B")
     ap.add_argument("--device", default=None)
     ap.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"])
-    ap.add_argument("--attn", default="steer_eager", choices=["steer_eager", "sdpa"],
-                    help="sdpa = numerics sensitivity only (no Module 4); its tag must end in _sdpa")
+    ap.add_argument("--attn", default="steer_eager", choices=["steer_eager", *ATTN_TAG_SUFFIX],
+                    help="numerics sensitivity only: sdpa (no Module 4; tag must end in _sdpa) or steer_fp32 "
+                         "(steer_eager with fp32 pre-softmax scores; tag must end in _fp32attn)")
     ap.add_argument("--prompts", default=str(ROOT / "data" / "test_prompts.json"))
     ap.add_argument("--n-prompts", type=int, default=None, help="evaluate a category-balanced subset")
     ap.add_argument("--n-calib", type=int, default=None, help="calibrate on a category-balanced subset")
@@ -83,10 +98,7 @@ def main() -> None:
         conditions = ["x5_full_minus_erase", *V2_CONDITIONS]
     if args.all:
         conditions = list(ALL_CONDITIONS)
-    tag = args.tag or f"test{len(prompts)}" + ("" if args.attn == "steer_eager" else f"_{args.attn}")
-    if args.attn != "steer_eager" and not tag.endswith(f"_{args.attn}"):
-        raise SystemExit(f"--attn {args.attn} runs must use a tag ending in _{args.attn} (the cache guard compares engine "
-                         "configs only, so attention implementations must never share a log)")
+    tag = results_tag(args.attn, args.tag, len(prompts))
     out_dir = ROOT / "results" / lm.slug / tag
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -127,7 +139,7 @@ def main() -> None:
     if instruct:
         print(f"[benchmark] wrote {out_dir / 'summary.json'}; the base model's report reads these logs")
         return
-    if tag.endswith(("_sdpa", "_512tok")):   # sensitivity tags: summary only; the protocol report (test40) reads them
+    if tag.endswith(("_sdpa", "_512tok", "_fp32attn")):   # sensitivity tags: summary only; the protocol report reads them
         (out_dir / "RESULTS.md").unlink(missing_ok=True)
         print(f"[benchmark] wrote {out_dir / 'summary.json'}; sensitivity tag, no report of its own")
         return

@@ -2,6 +2,7 @@
 
 * ``steer_eager`` attention: numerically identical to HF eager attention, plus an optional
   per-query-head pre-softmax bias (Module 4) and an optional attention-weight recorder (head discovery).
+  ``steer_fp32`` is the same with fp32 pre-softmax scores (a numerics sensitivity stack, not a benchmark condition).
 * ``AssistantEngine``: residual-stream forward hooks implementing Module 1 (lifecycle schedule +
   dynamic stop), Module 2 (drift nullspace erasure), Module 3 (single-pass self-contrastive predictor),
   and the static-CAA baseline.
@@ -25,6 +26,7 @@ from .artifact import SteeringArtifact
 from .negation import continuation_token_ids, extend_word, forbidden_token_ids, stem_completions, stem_of
 
 STEER_ATTN = "steer_eager"
+STEER_FP32_ATTN = "steer_fp32"   # numerics sensitivity only: fp32 pre-softmax scores, same bias/recorder slots
 _PUNCT_ENDINGS = (".", "!", "?", "\n", "`")
 
 
@@ -70,12 +72,51 @@ def steer_eager_attention_forward(
     return attn_output, attn_weights
 
 
-def install_steerable_attention(model: nn.Module) -> None:
-    """Route every attention layer through ``steer_eager`` (eager math, with bias/recorder slots)."""
-    AttentionInterface.register(STEER_ATTN, steer_eager_attention_forward)
+def steer_fp32_attention_forward(
+    module: nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    dropout: float = 0.0,
+    **kwargs,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """``steer_eager`` with the pre-softmax scores in fp32 (numerics sensitivity only, never a benchmark condition).
+
+    In bf16, ``steer_eager`` rounds Q·Kᵀ, the scaled scores and the masked sum to bf16 before the softmax, which costs
+    Qwen2.5-1.5B its arithmetic. Here query and key are upcast before the matmul, and mask, bias and softmax stay in
+    fp32; only the attention weights are cast back for the value matmul. Same bias and recorder slots."""
+    n_rep = query.shape[1] // key.shape[1]
+    key_states = _repeat_kv(key, n_rep)
+    value_states = _repeat_kv(value, n_rep)
+
+    attn_weights = torch.matmul(query.float(), key_states.float().transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        attn_weights = attn_weights + attention_mask[..., : key_states.shape[-2]].float()
+    bias: torch.Tensor | None = getattr(module, "_steer_bias", None)
+    if bias is not None:
+        attn_weights = attn_weights + bias[..., : attn_weights.shape[-1]].float()
+
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1).to(query.dtype)
+    recorder: Callable | None = getattr(module, "_attn_recorder", None)
+    if recorder is not None:
+        recorder(module, attn_weights)
+    attn_output = torch.matmul(attn_weights, value_states)
+    attn_output = attn_output.transpose(1, 2).contiguous()
+    return attn_output, attn_weights
+
+
+_STEER_FORWARDS = {STEER_ATTN: steer_eager_attention_forward, STEER_FP32_ATTN: steer_fp32_attention_forward}
+
+
+def install_steerable_attention(model: nn.Module, impl: str = STEER_ATTN) -> None:
+    """Route every attention layer through ``impl``: ``steer_eager`` (eager math, with bias/recorder slots) or
+    ``steer_fp32`` (the same with fp32 scores)."""
+    AttentionInterface.register(impl, _STEER_FORWARDS[impl])
     # Without a registered mask function HF silently skips the causal mask for unknown backends.
-    AttentionMaskInterface.register(STEER_ATTN, eager_mask)
-    model.config._attn_implementation = STEER_ATTN
+    AttentionMaskInterface.register(impl, eager_mask)
+    model.config._attn_implementation = impl
 
 
 def attention_module(layer: nn.Module) -> nn.Module:
@@ -248,8 +289,9 @@ class AssistantEngine:
         f32 = torch.float32
         if artifact is None and (cfg.any_residual() or cfg.pin_attention or cfg.boundary_hinge):
             raise ValueError("only the lexical operator (unembed_project) runs without a calibration artifact")
-        if cfg.pin_attention and getattr(lm, "attn", STEER_ATTN) != STEER_ATTN:
-            raise ValueError("Module 4 (pin_attention) needs the steer_eager attention; sdpa would silently drop the bias")
+        if cfg.pin_attention and getattr(lm, "attn", STEER_ATTN) not in _STEER_FORWARDS:
+            raise ValueError(f"Module 4 (pin_attention) needs steer_eager or steer_fp32 attention; {lm.attn} would "
+                             "silently drop the bias")
         self.layer_ids = list(artifact.layers) if artifact is not None else []
         self.k_of = {l: k for k, l in enumerate(self.layer_ids)}
         if artifact is not None:

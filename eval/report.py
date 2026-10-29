@@ -59,14 +59,53 @@ def _load_instruct(out_dir: Path) -> dict[str, list[dict]]:
 
 # Sensitivity runs of the economics comparison (separate tags; never mixed with the protocol logs).
 VARIANTS = [("", "protocol: eager attention, 160 tokens"), ("_sdpa", "SDPA attention, 160 tokens"),
-            ("_512tok", "eager attention, 512 tokens")]
+            ("_512tok", "eager attention, 512 tokens"), ("_fp32attn", "fp32-score attention, 160 tokens"),
+            ("_512tok_fp32attn", "fp32-score attention, 512 tokens")]
 SENS_CONDITIONS = ["1_raw_base", "2_raw_base_plus_stops", "10_engine_v2_1", "11_engine_v2_2_lean",
                    "12_official_instruct_chat", "12_official_instruct_bare", "13_instruct_plus_orth_ban_chat"]
+# fp32-score variants (steer_fp32): their protocol counterpart, and the Instruct logs their recovery rows also use.
+# 160 tokens: Instruct on SDPA (precise attention, same budget). 512 tokens: the variant's own steer_fp32 Instruct run
+# comes first; the eager 512-token Instruct is kept for continuity with the protocol figure.
+FP32_VARIANTS = {"_fp32attn": ("", ["_sdpa"]), "_512tok_fp32attn": ("_512tok", ["_512tok"])}
 
 
 def _variant_recs(out_dir: Path, suffix: str) -> dict[str, list[dict]]:
     d = out_dir.parent / (out_dir.name + suffix)
     return {**_load_logs(d, ALL_CONDITIONS), **_load_logs(_instruct_dir(d), INSTRUCT_CONDITIONS)}
+
+
+def _math_solved(rs: list[dict]) -> int:
+    from .verifiers import check_math_answer
+    checks = {p["id"]: c["answer"] for p in json.loads((ROOT / "data" / "test_prompts.json").read_text())
+              for c in p.get("checks", []) if c["type"] == "math_answer"}
+    return sum(check_math_answer(r["response"], checks[r["prompt_id"]]) for r in rs if r["prompt_id"] in checks)
+
+
+def _fp32_changes(var: list[tuple[str, str, dict]]) -> list[str]:
+    """Paired change of each condition from its protocol counterpart to the fp32-score stack (same prompts)."""
+    by = {sfx: (lab, rs) for sfx, lab, rs in var}
+    out = []
+    for sfx, (base, _) in FP32_VARIANTS.items():
+        if sfx not in by or base not in by:
+            continue
+        (lab, new), old = by[sfx], by[base][1]
+        for c in SENS_CONDITIONS:
+            if c in new and c in old:
+                pair = {"old": old[c], "new": new[c]}
+                o, n = summarize(old[c]), summarize(new[c])
+                lo, hi = paired_bootstrap_ci(pair, "old", "new")
+                same = {r["prompt_id"]: r["response"] for r in old[c]}
+                ident = sum(r["response"] == same.get(r["prompt_id"]) for r in new[c])
+                out.append(f"| `{c}` | {lab.split(', ')[-1]} | {o['composite']:.1f} | {n['composite']:.1f} "
+                           f"| {n['composite'] - o['composite']:+.1f} [{lo:+.1f}, {hi:+.1f}] "
+                           f"| {_math_solved(old[c])}/8 → {_math_solved(new[c])}/8 | {ident}/{len(new[c])} |")
+    if not out:
+        return []
+    return ["**fp32-score attention vs. the protocol stack** (same prompts, same frozen coefficients; Δ in Composite "
+            "points with a 95% paired-bootstrap CI; math = `math_answer` checks passed):", "",
+            "| Condition | Budget | Composite, eager bf16 scores | Composite, fp32 scores | Δ | Math solved | "
+            "Identical responses |",
+            "|---|---|---|---|---|---|---|", *out, ""]
 
 
 def _sensitivity(out_dir: Path) -> list[str]:
@@ -75,31 +114,33 @@ def _sensitivity(out_dir: Path) -> list[str]:
     if len(var) < 2:
         return []
     out = ["### Sensitivity of the post-training comparison", "",
-           "| Condition | " + " | ".join(f"Composite, {lab}" for _, lab, _ in var) + " | "
-           + " | ".join(f"hit token cap, {lab.split(': ')[-1]}" for _, lab, _ in var) + " |",
-           "|" + "---|" * (1 + 2 * len(var))]
+           "Composite, with the number of answers that hit the token cap in brackets:", "",
+           "| Condition | " + " | ".join(lab for _, lab, _ in var) + " |",
+           "|" + "---|" * (1 + len(var))]
     for c in SENS_CONDITIONS:
         cells = []
-        caps = []
         for _, _, rs in var:
             if c in rs:
                 s = summarize(rs[c])
-                cells.append(f"{s['composite']:.1f}")
-                caps.append(f"{s['stop_reasons']['max_tokens']}/{s['n']}")
+                cells.append(f"{s['composite']:.1f} ({s['stop_reasons']['max_tokens']}/{s['n']})")
             else:
                 cells.append("–")
-                caps.append("–")
         if any(x != "–" for x in cells):
-            out.append(f"| `{c}` | " + " | ".join(cells) + " | " + " | ".join(caps) + " |")
-    out.append("")
+            out.append(f"| `{c}` | " + " | ".join(cells) + " |")
+    out += ["", *_fp32_changes(var)]
     rows = []
     for sfx, lab, rs in var:
-        eng_src = rs if "10_engine_v2_1" in rs else var[0][2]   # the engine needs steer_eager: SDPA rows reuse the protocol engine
-        for eng in ("10_engine_v2_1", "11_engine_v2_2_lean"):
-            for inst in ("12_official_instruct_chat", "12_official_instruct_bare"):
-                if eng in eng_src:
-                    note = "" if eng_src is rs else " (engine on the protocol stack)"
-                    rows.append((lab + note, {**rs, eng: eng_src[eng]}, "1_raw_base", eng, inst))
+        eng_src = rs if "10_engine_v2_1" in rs else var[0][2]   # the engine needs steer_*: SDPA rows reuse the protocol engine
+        refs = [("", rs)] if any(c in rs for c in INSTRUCT_CONDITIONS) else []
+        for ref in FP32_VARIANTS.get(sfx, ("", []))[1]:
+            refs.append((f"; Instruct from `{out_dir.name}{ref}`", _load_logs(_instruct_dir(out_dir.parent / (out_dir.name + ref)),
+                                                                             INSTRUCT_CONDITIONS)))
+        for note_inst, irs in refs:
+            for eng in ("10_engine_v2_1", "11_engine_v2_2_lean"):
+                for inst in ("12_official_instruct_chat", "12_official_instruct_bare"):
+                    if eng in eng_src:
+                        note = "" if eng_src is rs else " (engine on the protocol stack)"
+                        rows.append((lab + note + note_inst, {**rs, **irs, eng: eng_src[eng]}, "1_raw_base", eng, inst))
     out += _recovery_table(rows)
     return out + [""]
 
@@ -593,7 +634,22 @@ def _methodology_v22(run: dict, recs: dict, irecs: dict) -> list[str]:
             "latencies are not comparable: part of it ran alongside the 1.5B KL job.",
             "  - `test40_sdpa` reruns conditions 1, 2, 12 and 13 (chat) on HF's SDPA attention. The engine conditions "
             "cannot run there: SDPA has no slot for the Module-4 bias, and `AssistantEngine` refuses `pin_attention` "
-            "without `steer_eager`.",
+            "without a `steer_*` attention.",
+            "  - `test40_fp32attn` and `test40_512tok_fp32attn` rerun conditions 1, 2, 10 and 11 on `steer_fp32`: "
+            "`steer_eager` with query and key upcast before Q·Kᵀ, and the scaling, causal mask, Module-4 bias and "
+            "softmax in fp32 (the weights are cast back to bf16 for the value matmul). It keeps Module 4, so it measures "
+            "what the bf16 score rounding costs the engine itself. The coefficients are the frozen ones, tuned on the "
+            "1.5B dev set on the bf16 `steer_eager` stack, so the engine runs off its tuning point there; nothing was "
+            "re-tuned. Checks before any test output (`scripts/check_fp32_attention.py`): in fp32 it is bit-identical "
+            "to HF eager without a bias and to `steer_eager` with one; in bf16 its logits sit as close to the fp32 "
+            "reference as SDPA's; the 1.5B raw base solves 8/8 math prompts on it.",
+            "  - The fp32 recovery rows take Instruct from `test40_sdpa` at 160 tokens (precise attention, same budget). "
+            "At 512 tokens they use a 1.5B Instruct run on `steer_fp32` (conditions 12 and 13 chat, 12 bare), added "
+            "because the eager stack also costs 1.5B Instruct its arithmetic. Its Composite did not move under SDPA at "
+            "160 tokens, but its math went from 2/8 to 4/8 with the other four truncated. The eager 512-token Instruct "
+            "is listed too, for continuity. The references and "
+            "the verdict rule were fixed before any fp32 output existed. 3B ran conditions 10 and 11 at 160 tokens "
+            "only, as a check, so it has no fp32 recovery rows.",
             "- **Clean-token KL** (`eval/alignment_tax.py`). Each condition is teacher-forced along the same clean "
             "answers; engine conditions replay them one token per pass with the full per-step schedule, including the "
             "EOS boosts and the lexical ban. The reference is the raw base in the bare frame, decoded step by step. The "
@@ -857,7 +913,8 @@ def _economics_section(out_dir: Path, summ: dict, recs: dict, irecs: dict, run: 
            "- **Composite, 512 tokens** reruns the same prompts with a 512-token budget (tag `test40_512tok`). "
            "Instruct writes longer answers, and the 160-token cap cuts many of them mid-sentence, which fails CleanStop.",
            "- **Stack.** Every row ran in bf16 on the steer_eager (HF-eager) attention, which Module 4 needs. The SDPA "
-           "rows of the sensitivity table quantify what that costs the attention-agnostic conditions.",
+           "rows of the sensitivity table quantify what that costs the attention-agnostic conditions, and the "
+           "fp32-score rows what it costs the engine (Module 4 included).",
            "- **tok/s** for conditions 2, 7, 10, x9 and 11 is the same-session benchmark; other rows are from their logs.",
            "- **One-off cost** for Instruct is the Qwen2.5 technical report's description of post-training (arXiv "
            "2412.15115); the engine's is measured wall time on the M4 Pro (trajectory generation and state collection).", ""]

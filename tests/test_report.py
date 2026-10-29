@@ -29,6 +29,11 @@ def test_report_regenerates(tmp_path):
     assert "| `1_raw_base` | 100.0 | 75.0 | 52.5 | 95.0 | **80.6** |" in text
     assert "## Appendix: other runs" in text
     assert "| `11_engine_v2_2_lean` |" in text and "## 7. Economics versus post-training" in text
+    # fp32-score sensitivity rows: paired change vs. the protocol stack, and recovery on a matched 512-token stack
+    assert "| `10_engine_v2_1` | 512 tokens | 87.5 | 90.0 | +2.5 [-3.1, +8.1] | 4/8 → 7/8 | 6/40 |" in text
+    assert ("| fp32-score attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +18.1 [+11.2, +25.0] "
+            "| -6.9 [-12.5, -1.9] | **62%** [28%, 90%] |") in text
+    assert "fp32-score attention, 160 tokens; Instruct from `test40_sdpa`" in text
 
 
 def _recs(name, scores):
