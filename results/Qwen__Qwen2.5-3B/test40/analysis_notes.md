@@ -362,3 +362,24 @@ results above stay primary.
     to be a weak test on 1.5B.
 - **Throughput.** fp32 scores cost speed. The 1.5B raw base runs at 33.4 tok/s against 39.4 on the protocol stack, and
   engine v2.1 at 29.7 against 37.1 (160 tokens).
+
+**Numerics, 3B at 512 tokens (sensitivity run): does 3B parity with Instruct survive fp32 attention scores?** This is
+a labelled sensitivity run; the protocol results above stay primary.
+- **Pre-registered** (written 2026-10-29T23:38Z on c1cc4fb, before any 3B or 3B-Instruct `steer_fp32` log at 512 tokens
+  existed).
+  - Runs, on `steer_fp32` at 512 tokens with the frozen coefficients (tag `test40_512tok_fp32attn`): 3B conditions 1, 2,
+    10 and 11; 3B-Instruct conditions 12 chat, 12 bare and 13 chat. Nothing is re-tuned.
+  - Verdict: condition 10 against `12_official_instruct_chat`, raw base = `1_raw_base`, all three on that stack.
+    Protocol-stack baseline (eager, 512 tokens): engine − Instruct = +1.9 [−1.9, +5.6], recovery 112% [87%, 150%].
+  - **Holds** if the paired CI of engine − Instruct includes 0 and the point estimate is ≥ −2.5. A CI entirely above 0
+    also counts as holding and is reported as "engine ahead".
+  - **Weakens** if the point estimate is < −2.5 while the CI still includes 0.
+  - **Fails** if the CI's upper bound is < 0.
+  - Reported, not used for the verdict: each condition's paired change from fp32 scores; the paired CI of the change
+    in the engine − Instruct gap (per-prompt gap records, the same method that gave −4.4 [−11.9, +2.5] on 1.5B);
+    recovery with `recovery_ci`; condition 11; the eager 512-token Instruct as a continuity row.
+  - Expected, stated before the runs: little room for the 1.5B mechanism. On eager at 512 tokens 3B Instruct-chat
+    already solves 8/8 math. Its nine imperfect prompts are three `direct_qa` truncations and six
+    `negative_constraints` violations (it uses the banned word). If all nine flipped, Instruct would gain 5.6 points.
+    The constraint misses are a behaviour that fp32 scores have no obvious reason to fix.
+  - Confound, as on 1.5B: the coefficients were tuned on the 1.5B dev set on the bf16 stack.
