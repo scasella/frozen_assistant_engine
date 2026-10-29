@@ -1,0 +1,21 @@
+# Python / tooling
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Large regenerable caches (pooled hidden-state statistics, 0.8-1.1 GB each).
+# Re-create with `python -m eval.benchmark --recalibrate` (trajectories are cached, so only forward passes re-run).
+artifacts/**/states.pt
+artifacts/**/calibration_prev.pt
+
+# Scratch
+*.log
+scratch/

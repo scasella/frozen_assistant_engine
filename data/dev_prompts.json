@@ -1,0 +1,37 @@
+[
+  {"id": "d_qa_01", "category": "direct_qa", "instruction": "How do bees make honey?",
+   "checks": [{"type": "keywords_min", "keywords": ["nectar", "enzyme", "evaporat", "honeycomb", "hive", "flower"], "min": 2}]},
+  {"id": "d_qa_02", "category": "direct_qa", "instruction": "What is the function of the kidneys?",
+   "checks": [{"type": "keywords_min", "keywords": ["filter", "blood", "urine", "waste", "toxin", "fluid"], "min": 2}]},
+  {"id": "d_qa_03", "category": "direct_qa", "instruction": "Why does ice float on water?",
+   "checks": [{"type": "keywords_min", "keywords": ["dens", "hydrogen bond", "expand", "lattice", "molecule", "volume"], "min": 2}]},
+
+  {"id": "d_fm_01", "category": "format_constraints", "instruction": "List three renewable energy sources as bullet points starting with \"- \".",
+   "checks": [{"type": "bullet_count", "n": 3, "marker": "- "}]},
+  {"id": "d_fm_02", "category": "format_constraints", "instruction": "Respond in valid JSON with keys \"answer\" and \"reason\": is a tomato a fruit?",
+   "checks": [{"type": "json_keys", "keys": ["answer", "reason"]}]},
+  {"id": "d_fm_03", "category": "format_constraints", "instruction": "Explain what DNS is in exactly two sentences.",
+   "checks": [{"type": "sentence_count", "n": 2}]},
+
+  {"id": "d_ng_01", "category": "negative_constraints", "instruction": "Describe a desert without using the word 'sand'.",
+   "checks": [{"type": "forbidden", "patterns": ["\\bsand(s|y)?\\b"]}, {"type": "min_words", "n": 15}]},
+  {"id": "d_ng_02", "category": "negative_constraints", "instruction": "Explain how a rainbow forms without using the word 'light'.",
+   "checks": [{"type": "forbidden", "patterns": ["\\blight(s)?\\b"]}, {"type": "min_words", "n": 15}]},
+  {"id": "d_ng_03", "category": "negative_constraints", "instruction": "List three musical instruments without mentioning the piano or the guitar.",
+   "checks": [{"type": "forbidden", "patterns": ["\\bpianos?\\b", "\\bguitars?\\b"]},
+              {"type": "regex_count_min", "min": 3, "patterns": ["violin", "drum", "flute", "trumpet", "saxophone", "cello", "clarinet", "harp", "trombone", "oboe", "ukulele", "banjo", "\\bbass\\b", "viola", "harmonica", "accordion", "tuba", "xylophone", "organ", "bagpipe", "sitar", "mandolin", "keyboard", "tambourine", "bassoon", "french horn"]}]},
+
+  {"id": "d_rm_01", "category": "reasoning_math", "instruction": "A box holds 24 eggs. How many eggs are in 6 boxes?",
+   "checks": [{"type": "math_answer", "answer": "144"}]},
+  {"id": "d_rm_02", "category": "reasoning_math", "instruction": "What is 56 divided by 8, plus 13?",
+   "checks": [{"type": "math_answer", "answer": "20"}]},
+  {"id": "d_rm_03", "category": "reasoning_math", "instruction": "A bike costs $240 and is on sale for 15% off. What is the sale price?",
+   "checks": [{"type": "math_answer", "answer": "204"}]},
+
+  {"id": "d_cd_01", "category": "code_and_sql", "instruction": "Write a Python function called square_list(nums) that returns a list of the squares of the numbers.",
+   "checks": [{"type": "python_def", "name": "square_list"}, {"type": "code_keywords", "patterns": ["\\breturn\\b"]}]},
+  {"id": "d_cd_02", "category": "code_and_sql", "instruction": "Write a SQL query to find the average price per category from a table items(category, price).",
+   "checks": [{"type": "code_keywords", "patterns": ["\\bselect\\b", "\\bavg\\s*\\(", "\\bfrom\\s+items\\b", "\\bgroup\\s+by\\b"]}]},
+  {"id": "d_cd_03", "category": "code_and_sql", "instruction": "Write a Python function called count_words(s) that returns the number of words in a string.",
+   "checks": [{"type": "python_def", "name": "count_words"}, {"type": "code_keywords", "patterns": ["\\breturn\\b"]}]}
+]
