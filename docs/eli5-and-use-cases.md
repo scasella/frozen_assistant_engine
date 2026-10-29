@@ -51,8 +51,11 @@ thresholds that the hooks read at run time.
 - **It is not magic for "don't say X" prompts.** On "explain bicycle riding without the word *balance*", the model
   sometimes dodges the task ("…without using the word *bicycle*, you can say…"). Our automatic checker even counts some
   of those dodges as passes.
-- **It was tested on only two models** (Qwen2.5 3B and 1.5B base) and 40 test questions. On the smaller model most of
+- **It was tested on only two base models** (Qwen2.5 3B and 1.5B) and 40 test questions. On the smaller model most of
   the improvements are within statistical noise.
+- **It is not a replacement for real post-training in general.** On our four checks, the 3B engine matches the
+  official Qwen2.5-3B-Instruct when both get 512 tokens to answer (96.2 vs. 94.4). On 1.5B, Instruct is ahead (90.0 vs.
+  87.5). The checks measure starting, stopping and following rules, not helpfulness or safety.
 
 ## Part 2: Practical use cases
 
@@ -60,7 +63,7 @@ thresholds that the hooks read at run time.
 |---|---|---|
 | **Zero-prefix inference.** Drop a few-shot or system prefix and keep assistant behaviour. | On 3B: 94.4% Composite against 84.4% for the 768-token URIAL prefix (+10.0 [+3.8, +16.2]); 3.25 s against 5.30 s per query (−39% wall time, which includes shorter answers); and no prefix in the KV cache, about **28 MB per query** saved in bf16 for this model. | Batched serving, other prompt formats, long multi-turn conversations. |
 | **Training-free assistant behaviour on local hardware.** | Everything ran on an Apple M4 Pro (24 GB) in bf16. Calibration used 80 prompts and took ~21 min for 3B, producing a ~3 MB artifact. No gradients, no fine-tuning data. | Quantised checkpoints, domain-pretrained base models, CUDA/CPU runs, other architectures. |
-| **Word bans without collateral damage.** | The sibling-orthogonalised projection leaves the top candidate words' relative logits unchanged (0.00) where a naive ban moved them by −3.6 to −13.7. Removing it cost −6.9 [−13.1, −1.9] Composite on 1.5B. | Instruct/chat models. The projection only needs the LM head and the current state, so it should transfer, but we have not run it there. |
+| **Word bans without collateral damage, including on chat models.** | The sibling-orthogonalised projection leaves the top candidate words' relative logits unchanged (0.00) where a naive ban moved them by −3.6 to −13.7. Removing it cost −6.9 [−13.1, −1.9] Composite on 1.5B. Bolted onto the official Qwen2.5-3B-**Instruct** with no re-tuning, it raised "don't say X" compliance from 37.5% to 87.5%, breaking nothing on 3B. On 1.5B-Instruct it collapsed one answer into a loop. | Larger chat models, sampling, and bans the parser does not recognise. |
 | **Stopping post-answer drift in math and code generation.** | On 3B arithmetic prompts, the boundary-coupled hinge took Composite from 87.5% (p99 hinge alone) to 96.9%, by erasing FLAN `[Question]` continuations at line boundaries. | Specialised math or code base models and longer outputs. Some drift genres still slip through (`------` separators, `[Reasoning: …]` tags). |
 
 ## Where to go next

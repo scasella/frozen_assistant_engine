@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frozen Assistant Studio</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div>
+      <div class="brand-title">Frozen Assistant Studio</div>
+      <div class="brand-sub">zero-weight-update engine vs. post-training</div>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-view="arena" role="tab">Live Arena &amp; X-Ray</button>
+    <button class="tab" data-view="economics" role="tab">Alignment Tax &amp; Economics</button>
+    <button class="tab" data-view="browser" role="tab">Benchmark Browser</button>
+  </nav>
+  <div class="top-right">
+    <div class="seg" id="model-switch" title="Base model family">
+      <button data-model="3B" class="on">Qwen2.5-3B</button>
+      <button data-model="1.5B">1.5B</button>
+    </div>
+    <div class="delta-meter" id="delta-meter" title="What each approach changes in the model">
+      <div class="dm-row"><span class="dm-label eng">Engine hook</span><span class="dm-bar"><i class="eng" style="width:0.5%"></i></span><span class="dm-val" id="dm-eng">3.0 MB · 0% weights</span></div>
+      <div class="dm-row"><span class="dm-label ins">Instruct ckpt</span><span class="dm-bar"><i class="ins" id="dm-ins-bar" style="width:86.8%"></i></span><span class="dm-val" id="dm-ins">6.17 GB · 86.8% rewritten</span></div>
+    </div>
+    <div class="ram" id="ram" title="Unified memory">
+      <div class="ram-head"><span>RAM</span><b id="ram-val">–</b></div>
+      <div class="ram-bar"><i id="ram-fill"></i></div>
+      <div class="ram-models" id="ram-models">no model resident</div>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ============================ ARENA ============================ -->
+<section class="view active" id="view-arena">
+  <aside class="sidebar">
+    <div class="side-head">Killer scenarios <span class="hint">logged outcome per column: R · C · E · I</span></div>
+    <div id="presets" class="presets"></div>
+    <div class="side-head">All 40 test prompts</div>
+    <select id="prompt-select" class="input"></select>
+    <div class="side-head">Custom prompt</div>
+    <textarea id="custom-prompt" class="input" rows="3" placeholder="e.g. Describe the moon without using the word 'light'."></textarea>
+    <button class="btn ghost" id="use-custom">Use custom prompt</button>
+  </aside>
+
+  <div class="arena-main">
+    <div class="run-bar glass">
+      <div class="prompt-line"><span class="pid" id="cur-pid">–</span><span id="cur-prompt" class="cur-prompt">Pick a scenario on the left.</span></div>
+      <div class="run-controls">
+        <div class="seg small" id="tok-switch" title="max_new_tokens"><button data-n="160" class="on">160 tok</button><button data-n="512">512 tok</button></div>
+        <label class="chk" title="One extra unsteered forward pass per token for the engine and the banned Instruct column"><input type="checkbox" id="exact-kl" checked> exact step-KL</label>
+        <label class="chk" title="Stream every column from the cached benchmark logs (no GPU, benchmark prompts only)"><input type="checkbox" id="replay"> replay logs</label>
+        <button class="btn ghost" id="open-drawer">Ablation controls</button>
+        <button class="btn primary" id="run-btn">Run 4-way ▶</button>
+        <button class="btn danger" id="stop-btn" disabled>Stop</button>
+      </div>
+    </div>
+    <div class="status-line" id="status-line"></div>
+
+    <div class="cards" id="cards">
+      <article class="card" data-col="raw">
+        <header><span class="dot raw"></span><span class="card-title">Raw base (unsteered)</span><span class="chip" data-role="cond">cond 1</span></header>
+        <div class="card-sub">frozen Qwen2.5 base · bare <code>Question/Answer</code> frame · no stop strings</div>
+        <div class="stream" data-role="stream"></div>
+        <footer data-role="badges"></footer>
+      </article>
+      <article class="card" data-col="caa">
+        <header><span class="dot caa"></span><span class="card-title">Static steering (CAA)</span><span class="chip" data-role="cond">cond 4</span></header>
+        <div class="card-sub">one contrastive vector added at every position</div>
+        <div class="stream" data-role="stream"></div>
+        <footer data-role="badges"></footer>
+      </article>
+      <article class="card hero" data-col="engine">
+        <header><span class="dot eng"></span><span class="card-title" data-role="title">Zero-weight-update engine</span><span class="chip eng" data-role="cond">v2.3 demo</span></header>
+        <div class="card-sub">3.0 MB hook on the same frozen weights · <span class="legend"><i class="lg init"></i>init pulse <i class="lg hinge"></i>hinge clamp <i class="lg ban"></i>ban flip <i class="lg guard"></i>stem guard</span></div>
+        <div class="stream" data-role="stream"></div>
+        <footer data-role="badges"></footer>
+      </article>
+      <article class="card" data-col="instruct">
+        <header><span class="dot ins"></span><span class="card-title" data-role="title">Official Instruct (post-trained)</span>
+          <label class="switch" title="Attach the zero-training sibling-orthogonal ban (condition 13)"><input type="checkbox" id="instruct-ban"><span class="slider"></span><span class="sw-label">+ our ban</span></label>
+        </header>
+        <div class="card-sub"><span data-role="isub">6.17 GB checkpoint · chat template</span> · <select id="instruct-frame" class="mini-select"><option value="chat">chat template</option><option value="bare">bare frame</option></select></div>
+        <div class="stream" data-role="stream"></div>
+        <footer data-role="badges"></footer>
+      </article>
+    </div>
+
+    <section class="xray glass" id="xray">
+      <div class="xray-head">
+        <div><b>Circuit X-Ray</b> <span class="hint">engine column · hover to scrub, click a token to inspect</span></div>
+        <div class="xray-legend">
+          <span><i class="ln z"></i>drift z(t) @ layer <b id="drift-layer">–</b></span>
+          <span><i class="ln kappa"></i>hinge κ(t)</span>
+          <span><i class="ln init"></i>‖init + M3‖</span>
+          <span><i class="ln sus"></i>‖sustain‖</span>
+          <span><i class="ln eos"></i>cos(h, μ_eos)</span>
+          <span><i class="ln kl"></i>step KL (nats)</span>
+        </div>
+      </div>
+      <div class="xray-body">
+        <div class="scope-wrap"><canvas id="scope"></canvas><div class="scope-tip" id="scope-tip"></div></div>
+        <div class="inspector" id="inspector"><div class="empty">Run a prompt, then click any engine token.</div></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head"><b>Live ablation controls</b><button class="x" id="close-drawer" aria-label="Close">×</button></div>
+    <p class="hint">Apply to the engine column (stem and γ also apply to the Instruct ban). Defaults = condition 11 + stem morphology. Coefficients were frozen on the 1.5B dev set.</p>
+    <div class="mods">
+      <label><input type="checkbox" data-mod="lifecycle" checked> <b>M1</b> Lifecycle (init/sustain + completion stop)</label>
+      <label><input type="checkbox" data-mod="boundary_hinge" checked> <b>M2</b> Boundary-coupled hinge erasure</label>
+      <label><input type="checkbox" data-mod="predictor" checked> <b>M3</b> Rank-16 initiation predictor</label>
+      <label><input type="checkbox" data-mod="pin_attention" checked> <b>M4</b> Instruction-pinning attention</label>
+      <label><input type="checkbox" data-mod="unembed_ban" checked> Sibling-orthogonal unembedding ban</label>
+      <label><input type="checkbox" data-mod="stem" checked> Stem morphology + sub-word guard</label>
+    </div>
+    <div class="sliders">
+      <label>κ<sub>boundary</sub> <output id="o-kappa">1.5</output><input type="range" id="s-kappa" min="0.5" max="3.5" step="0.1" value="1.5"></label>
+      <label>γ<sub>unembed</sub> <output id="o-gamma">1.5</output><input type="range" id="s-gamma" min="0" max="3" step="0.1" value="1.5"></label>
+      <label>β<sub>attn</sub> <output id="o-beta">0.5</output><input type="range" id="s-beta" min="0" max="2" step="0.05" value="0.5"></label>
+    </div>
+    <div class="drawer-actions">
+      <button class="btn ghost" id="reset-v23">Reset to v2.3 demo</button>
+      <button class="btn ghost" id="reset-11">Exactly condition 11</button>
+      <button class="btn primary" id="rerun-engine">Re-run engine only ▶</button>
+    </div>
+    <div class="cfg-diff" id="cfg-diff"></div>
+  </div>
+</section>
+
+<!-- ============================ ECONOMICS ============================ -->
+<section class="view" id="view-economics">
+  <div class="eco-intro">
+    <h1>The alignment tax</h1>
+    <p>How far each way of getting assistant behaviour moves the frozen base model's next-token distribution on clean assistant text, against what it buys on the 40-prompt benchmark. All numbers are read from <code>results/</code>.</p>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="eco-grid">
+    <div class="panel glass">
+      <div class="panel-head">
+        <b>Composite vs. clean-token KL</b>
+        <div class="panel-controls">
+          <select id="kl-pool" class="mini-select">
+            <option value="heldout_no_negation">held-out, no-negation prompts</option>
+            <option value="heldout_all">held-out, all prompts</option>
+            <option value="calibration_no_negation">calibration, no-negation</option>
+            <option value="calibration_all">calibration, all</option>
+          </select>
+          <div class="seg small" id="budget-switch"><button data-b="160">160 tok</button><button data-b="512" class="on">512 tok</button></div>
+        </div>
+      </div>
+      <div id="scatter" class="chart"></div>
+      <p class="caption" id="scatter-note"></p>
+    </div>
+    <div class="panel glass">
+      <div class="panel-head"><b>KL distortion and top-1 agreement</b><span class="hint" id="kl-pool-label"></span></div>
+      <div id="klbars" class="chart"></div>
+      <p class="caption" id="kl-note"></p>
+    </div>
+  </div>
+  <div class="panel glass">
+    <div class="panel-head"><b>Unit economics</b><span class="hint" id="ue-model"></span></div>
+    <div class="table-wrap"><table class="data" id="ue-table"></table></div>
+    <p class="caption" id="recovery-note"></p>
+  </div>
+  <div class="panel glass">
+    <div class="panel-head"><b>Ablation waterfall: Composite gain over the raw base</b>
+      <div class="panel-controls">
+        <div class="seg small" id="wf-sort"><button data-s="order" class="on">by phase</button><button data-s="score">by score</button></div>
+      </div>
+    </div>
+    <div id="waterfall" class="chart"></div>
+    <p class="caption" id="wf-note"></p>
+    <div class="table-wrap"><table class="data sortable" id="ab-table"></table></div>
+  </div>
+</section>
+
+<!-- ============================ BROWSER ============================ -->
+<section class="view" id="view-browser">
+  <div class="br-controls glass">
+    <div class="seg small" id="tag-switch"></div>
+    <div class="cat-chips" id="cat-chips"></div>
+    <label class="chk"><input type="checkbox" id="only-disagree"> only where the selected conditions disagree</label>
+    <input class="input search" id="br-search" placeholder="search prompts…">
+  </div>
+  <div class="cond-chips glass" id="cond-chips"></div>
+  <div class="br-body">
+    <div class="br-list" id="br-list"></div>
+    <div class="br-detail" id="br-detail"><div class="empty">Select a prompt.</div></div>
+  </div>
+</section>
+</main>
+<div class="toast" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

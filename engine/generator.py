@@ -80,6 +80,26 @@ def encode_prompt(tokenizer, instruction: str, urial: bool = False) -> EncodedPr
                          neg_target_positions=neg_target, neg_targets=targets, neg_echo_words=echo_words)
 
 
+def encode_chat_prompt(tokenizer, instruction: str) -> EncodedPrompt:
+    """The checkpoint's own chat template (one user turn, generation prompt appended; Qwen2.5 adds its default system
+    prompt). ``extra_tokens`` counts the template's overhead over the bare ``Question: ...\nAnswer:`` frame."""
+    text = tokenizer.apply_chat_template([{"role": "user", "content": instruction}], add_generation_prompt=True,
+                                         tokenize=False)
+    enc = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
+    ids: list[int] = list(enc["input_ids"])
+    start = text.index(instruction)
+    end = start + len(instruction)
+    offsets = [tuple(o) for o in enc["offset_mapping"]]
+    inst = [i for i, (a, b) in enumerate(offsets) if b > start and a < end and b > a]
+    negs = parse_negations(instruction)
+    bare = encode_prompt(tokenizer, instruction)
+    return EncodedPrompt(
+        ids=ids, inst_positions=inst, extra_tokens=len(ids) - len(bare.ids),
+        neg_clause_positions=char_spans_to_tokens(offsets, [n.clause for n in negs], start),
+        neg_target_positions=char_spans_to_tokens(offsets, [(a, b) for n in negs for a, b, _ in n.targets], start),
+        neg_targets=bare.neg_targets, neg_echo_words=bare.neg_echo_words)
+
+
 def _kept_ids(tokenizer, ids: list[int], char_limit: int | None) -> list[int]:
     """Longest prefix of ``ids`` whose decoded text fits within ``char_limit``; trailing blanks dropped."""
     j = len(ids)
@@ -106,9 +126,12 @@ def generate(
     max_new_tokens: int = 160,
     stop_strings: list[str] | None = None,
     engine: AssistantEngine | None = None,
+    eos_ids: tuple[int, ...] | None = None,
 ) -> GenerationResult:
+    """``eos_ids`` defaults to the tokenizer's EOS; Instruct checkpoints pass every turn-ending id."""
     model, tok, dev = lm.model, lm.tokenizer, lm.device
     stop_strings = stop_strings or []
+    stop_ids = set(eos_ids) if eos_ids else {lm.eos_token_id}
     cache = DynamicCache(config=model.config)
     input_ids = torch.tensor([prompt.ids], device=dev)
     if engine is not None:
@@ -125,7 +148,7 @@ def generate(
         if engine is not None:
             logits = engine.process_logits(logits)
         next_id = int(torch.argmax(logits).item())
-        if next_id == lm.eos_token_id:
+        if next_id in stop_ids:
             stop_reason = "eos"
             break
         generated.append(next_id)
@@ -163,3 +186,39 @@ def generate(
         stop_events=list(engine.stop_events) if engine is not None else [],
         engine_trace=engine.trace() if engine is not None else {},
     )
+
+
+@torch.no_grad()
+def teacher_force(lm, prompt: EncodedPrompt, target_ids: list[int], engine: AssistantEngine | None = None,
+                  stepwise: bool = True) -> torch.Tensor:
+    """Next-token log-probabilities [len(target_ids), V] (float32, on device) along a fixed continuation.
+
+    ``stepwise`` replays the continuation exactly like ``generate`` does (prefill, then one token per pass, with
+    ``engine.set_step`` and ``engine.process_logits``), so a stateful engine sees the same schedule it sees while
+    generating. ``stepwise=False`` runs one forward pass over prompt + continuation (engine-free conditions only).
+    """
+    model, tok, dev = lm.model, lm.tokenizer, lm.device
+    if not stepwise:
+        if engine is not None:
+            raise ValueError("the engine is stateful per decode step; use stepwise=True")
+        ids = torch.tensor([prompt.ids + list(target_ids[:-1])], device=dev)
+        logits = model(input_ids=ids, use_cache=False, logits_to_keep=len(target_ids)).logits[0]
+        return torch.log_softmax(logits.float(), dim=-1)
+    cache = DynamicCache(config=model.config)
+    if engine is not None:
+        engine.begin(prompt, len(prompt.ids) + len(target_ids) + 1)
+    out = model(input_ids=torch.tensor([prompt.ids], device=dev), past_key_values=cache, use_cache=True, logits_to_keep=1)
+    rows = []
+    for step, next_id in enumerate(target_ids):
+        logits = out.logits[0, -1]
+        if engine is not None:
+            logits = engine.process_logits(logits)
+        rows.append(torch.log_softmax(logits.float(), dim=-1))
+        if step == len(target_ids) - 1:
+            break
+        if engine is not None:
+            engine.set_step(step + 1, tok.decode([next_id]))
+        out = model(input_ids=torch.tensor([[next_id]], device=dev), past_key_values=cache, use_cache=True)
+    if engine is not None:
+        engine.end()
+    return torch.stack(rows)

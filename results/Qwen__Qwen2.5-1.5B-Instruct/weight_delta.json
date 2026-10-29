@@ -1,0 +1,13 @@
+{
+ "base": "Qwen/Qwen2.5-1.5B",
+ "instruct": "Qwen/Qwen2.5-1.5B-Instruct",
+ "tensors_compared": 338,
+ "only_in_base": [],
+ "only_in_instruct": [],
+ "params": 1543714304,
+ "params_changed": 1338628935,
+ "params_changed_frac": 0.8671481060526599,
+ "tensors_changed": 338,
+ "relative_frobenius_update": 0.010285741385891336,
+ "instruct_weights_bytes": 3087428608
+}

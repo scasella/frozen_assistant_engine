@@ -11,7 +11,7 @@ import math
 from datetime import date
 from pathlib import Path
 
-from .conditions import ALL_CONDITIONS, summarize
+from .conditions import ALL_CONDITIONS, INSTRUCT_CONDITIONS, INSTRUCT_SUFFIX, summarize
 from .verifiers import score_response
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +32,76 @@ def _load(out_dir: Path) -> tuple[dict, dict[str, list[dict]]]:
             for r in recs[name]:  # always re-score from the logged text so the report tracks the current verifiers
                 r["metrics"] = score_response(r["response"], r["stop_reason"], prompts[r["prompt_id"]])
     return summary, recs
+
+
+def _instruct_dir(out_dir: Path) -> Path:
+    """results/<base slug>/<tag> -> results/<base slug>-Instruct/<tag> (the post-trained reference checkpoint)."""
+    return out_dir.parent.parent / (out_dir.parent.name + INSTRUCT_SUFFIX) / out_dir.name
+
+
+def _load_logs(d: Path, names) -> dict[str, list[dict]]:
+    if not d.exists():
+        return {}
+    prompts = {p["id"]: p for p in json.loads((ROOT / "data" / "test_prompts.json").read_text())}
+    recs: dict[str, list[dict]] = {}
+    for name in names:
+        f = d / f"{name}.jsonl"
+        if f.exists():
+            recs[name] = [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+            for r in recs[name]:
+                r["metrics"] = score_response(r["response"], r["stop_reason"], prompts[r["prompt_id"]])
+    return recs
+
+
+def _load_instruct(out_dir: Path) -> dict[str, list[dict]]:
+    return _load_logs(_instruct_dir(out_dir), INSTRUCT_CONDITIONS)
+
+
+# Sensitivity runs of the economics comparison (separate tags; never mixed with the protocol logs).
+VARIANTS = [("", "protocol: eager attention, 160 tokens"), ("_sdpa", "SDPA attention, 160 tokens"),
+            ("_512tok", "eager attention, 512 tokens")]
+SENS_CONDITIONS = ["1_raw_base", "2_raw_base_plus_stops", "10_engine_v2_1", "11_engine_v2_2_lean",
+                   "12_official_instruct_chat", "12_official_instruct_bare", "13_instruct_plus_orth_ban_chat"]
+
+
+def _variant_recs(out_dir: Path, suffix: str) -> dict[str, list[dict]]:
+    d = out_dir.parent / (out_dir.name + suffix)
+    return {**_load_logs(d, ALL_CONDITIONS), **_load_logs(_instruct_dir(d), INSTRUCT_CONDITIONS)}
+
+
+def _sensitivity(out_dir: Path) -> list[str]:
+    var = [(sfx, lab, _variant_recs(out_dir, sfx)) for sfx, lab in VARIANTS]
+    var = [v for v in var if v[2]]
+    if len(var) < 2:
+        return []
+    out = ["### Sensitivity of the post-training comparison", "",
+           "| Condition | " + " | ".join(f"Composite, {lab}" for _, lab, _ in var) + " | "
+           + " | ".join(f"hit token cap, {lab.split(': ')[-1]}" for _, lab, _ in var) + " |",
+           "|" + "---|" * (1 + 2 * len(var))]
+    for c in SENS_CONDITIONS:
+        cells = []
+        caps = []
+        for _, _, rs in var:
+            if c in rs:
+                s = summarize(rs[c])
+                cells.append(f"{s['composite']:.1f}")
+                caps.append(f"{s['stop_reasons']['max_tokens']}/{s['n']}")
+            else:
+                cells.append("–")
+                caps.append("–")
+        if any(x != "–" for x in cells):
+            out.append(f"| `{c}` | " + " | ".join(cells) + " | " + " | ".join(caps) + " |")
+    out.append("")
+    rows = []
+    for sfx, lab, rs in var:
+        eng_src = rs if "10_engine_v2_1" in rs else var[0][2]   # the engine needs steer_eager: SDPA rows reuse the protocol engine
+        for eng in ("10_engine_v2_1", "11_engine_v2_2_lean"):
+            for inst in ("12_official_instruct_chat", "12_official_instruct_bare"):
+                if eng in eng_src:
+                    note = "" if eng_src is rs else " (engine on the protocol stack)"
+                    rows.append((lab + note, {**rs, eng: eng_src[eng]}, "1_raw_base", eng, inst))
+    out += _recovery_table(rows)
+    return out + [""]
 
 
 def _fmt(x: float, nd: int = 1) -> str:
@@ -311,7 +381,10 @@ def _appendix(dirs: list[Path]) -> list[str]:
                 *_summary_table(summ), "", "#### Per-category Composite (%)", "", *_category_table(ordered, "composite"), "",
                 "#### Per-category ConstraintScore (%)", "", *_category_table(ordered, "constraint"), "",
                 "#### Module contributions", "", *_analysis(summ, ordered, diag), "", *_phase2_analysis(summ, ordered, run),
-                *_phase3_analysis(summ, ordered, run)]
+                *_phase3_analysis(summ, ordered, run), *_phase4_analysis(summ, ordered, _load_instruct(d), d)]
+        ue = unit_economics(d, summ, ordered, _load_instruct(d), run)
+        if ue:
+            out += ["#### Unit economics", "", *ue, "", *[ln.replace("### ", "#### ", 1) for ln in _sensitivity(d)]]
     return out
 
 
@@ -461,6 +534,105 @@ def _methodology_v21(run: dict, recs: dict) -> list[str]:
     ]
 
 
+def _methodology_v22(run: dict, recs: dict, irecs: dict) -> list[str]:
+    if "11_engine_v2_2_lean" not in recs and not irecs:
+        return []
+    hp = run.get("hparams") or {}
+    out = ["### Phase 4 (v2.2 lean engine and post-trained reference) methodology", ""]
+    if "11_engine_v2_2_lean" in recs:
+        out += [
+            "- **Condition 11 (`11_engine_v2_2_lean`)** keeps the two v2.1 mechanisms that the leave-one-outs credit: the "
+            f"boundary-coupled hinge (κ_boundary = {hp.get('kappa_boundary', '–')}) and the sibling-orthogonalised "
+            f"projection (K = {hp.get('sibling_k', '–')}, γ = {hp.get('gamma_unembed', '–')}, centred). It drops the "
+            "drift-assisted stop and the anti-echo guard. It has no new coefficients, and the stop check still starts at "
+            "t ≥ 6 as in v2.1. **Its mechanism set was chosen from the test-set leave-one-outs, so its test score is not "
+            "a held-out estimate.** Condition 10 remains the dev-selected headline.",
+            "- **Lean execution (`boundary_trigger = \"text\"`, `sibling_fast = True`):**",
+            "  - **Text-only boundary trigger.** The boundary window opens only when the last generated token contains "
+            "`. ! ? \\n`, or within 2 steps after a newline. The v2.1 score clause is dropped, so the stop-layer "
+            "completion score is computed only on stop-check steps (punctuation tokens), as in condition 7. No other step "
+            "has an extra host sync.",
+            "  - **Sync-free projection.** The sibling-orthogonalised projection computes the same arithmetic without host "
+            "synchronisation: the fallback and Gram-Schmidt branches are `torch.where` selections, and the trace "
+            "counters stay on device until the answer ends.",
+            "  - **Smaller sibling search.** The sibling search multiplies only the pre-indexed word-token rows of the "
+            "unembedding (tokens containing an ASCII letter; 61.8% of Qwen2.5's vocabulary) instead of the whole "
+            "vocabulary.",
+            "- **Why a second vocabulary product remains.**",
+            "  - The siblings are the top-K tokens of the *unprojected* logits, while the emitted logits must come from "
+            "the *projected* state, so an exact implementation reads the unembedding twice on negation prompts.",
+            "  - Applying the update in logit space (`logits + W·Δh`) does not avoid this: `W·Δh` is itself a "
+            "full-vocabulary product.",
+            "  - Any re-association that is not bit-identical in bf16 changes greedy outputs at near-ties.",
+            "  - The lean path therefore keeps the exact computation, makes the search product 38% smaller, and removes "
+            "the synchronisation stalls, which `scripts/bench_speed.py` shows were most of the cost.",
+        ]
+    if irecs:
+        out += [
+            "- **Post-trained reference (conditions 12 and 13).** The official `-Instruct` checkpoints were run on the "
+            "same 40 prompts with the same greedy loop, `max_new_tokens = 160`, stop strings and frozen verifiers.",
+            "  - **Frames.** `_bare` uses the identical `Question: {instruction}\\nAnswer:` frame. `_chat` uses the "
+            "checkpoint's chat template, which includes Qwen's default system prompt; its *Extra ctx tokens* column "
+            "counts the template's overhead over the bare frame.",
+            "  - **Turn endings.** Generation ends on either turn-ending id in the checkpoint's `generation_config` "
+            "(`<|im_end|>`, `<|endoftext|>`).",
+            "  - **Decoding.** Qwen's recommended sampling settings (temperature 0.7, top-p 0.8, repetition penalty "
+            "1.05) are *not* used: every condition decodes greedily.",
+            "- **Condition 13** attaches only condition 11's lexical operator to the Instruct checkpoint. It uses the "
+            "same frozen base-dev coefficients and no calibration artifact, and nothing was tuned on Instruct. It can "
+            "only change the 8 prompts that contain a parsed negation.",
+            "- **Post-training recovery** is (C_engine − C_raw) / (C_Instruct − C_raw), with a 95% paired-bootstrap CI "
+            "over prompts (10k resamples). The headline uses the raw base without stop strings (condition 1), as in "
+            "every other comparison; the version over condition 2 (with stop strings) is listed too.",
+            "- **Frozen verifiers.** The verifiers were written for base-model failure modes and were not changed for "
+            "Instruct outputs. In particular, CleanStop fails answers that hit the 160-token cap mid-sentence, which "
+            "penalises verbose answers.",
+            "- **Sensitivity runs** (separate tags, never mixed with the protocol logs):",
+            "  - `test40_512tok` reruns conditions 1, 10, 11, 12 and 13 (chat) with `max_new_tokens = 512`. It was "
+            "planned after seeing Instruct's 160-token truncations and before any 512-token output existed. Its "
+            "latencies are not comparable: part of it ran alongside the 1.5B KL job.",
+            "  - `test40_sdpa` reruns conditions 1, 2, 12 and 13 (chat) on HF's SDPA attention. The engine conditions "
+            "cannot run there: SDPA has no slot for the Module-4 bias, and `AssistantEngine` refuses `pin_attention` "
+            "without `steer_eager`.",
+            "- **Clean-token KL** (`eval/alignment_tax.py`). Each condition is teacher-forced along the same clean "
+            "answers; engine conditions replay them one token per pass with the full per-step schedule, including the "
+            "EOS boosts and the lexical ban. The reference is the raw base in the bare frame, decoded step by step. The "
+            "answers are URIAL-teacher text in the base model's style, not Instruct-style text.",
+        ]
+    return out + [""]
+
+
+def _instruct_cases(recs: dict, irecs: dict, k: int = 6) -> list[str]:
+    """Verbatim engine-vs-Instruct cases, chosen by rule: every prompt where condition 13 changed the Instruct answer,
+    then the first prompts (by id) where engine v2.1 and Instruct-chat Composite differ."""
+    a, b, e = "12_official_instruct_chat", "13_instruct_plus_orth_ban_chat", "10_engine_v2_1"
+    if a not in irecs or e not in recs:
+        return []
+    conds = [(e, recs), ("11_engine_v2_2_lean", recs), (a, irecs), (b, irecs)]
+    conds = [(c, src) for c, src in conds if c in src]
+    by = {c: {r["prompt_id"]: r for r in src[c]} for c, src in conds}
+    changed = sorted(p for p in by[a] if b in by and by[b][p]["response"] != by[a][p]["response"])
+    differ = sorted(p for p in by[a] if by[a][p]["metrics"]["composite"] != by[e][p]["metrics"]["composite"])
+    picks = changed + [p for p in differ if p not in changed][:k]
+    if not picks:
+        return []
+    out = ["## 8. Engine vs. post-trained Instruct (verbatim)", "",
+           f"Selected by rule: the {len(changed)} prompts where the sibling-orthogonal ban changed the Instruct (chat) "
+           f"answer, then the first {min(k, len(differ))} prompts (by id) whose Composite differs between `{e}` and "
+           f"`{a}`. Outputs are shown after stop-string truncation.", ""]
+    for pid in picks:
+        r0 = by[a][pid]
+        out += [f"### `{pid}` ({r0['category']})", "", f"**Prompt:** {r0['instruction']}", ""]
+        for c, _ in conds:
+            r = by[c][pid]
+            m = r["metrics"]
+            flags = " · ".join(f"{lab}={'✔' if m[key] else '✘'}" for key, lab in
+                               [("turn_cross", "Turn"), ("constraint", "Constraint"), ("clean_stop", "Stop"), ("fluency", "Fluency")])
+            out += [f"**`{c}`** — {flags} · stop=`{r['stop_reason']}` · {r['n_new_tokens']} tokens", "",
+                    "~~~text", r["response"] if r["response"] else "(empty)", "~~~", ""]
+    return out
+
+
 TARGETED = [("t_ng_02", "v1 repetition loop (3B)"),
             ("t_qa_01", "v1 option-label loop; v2 FLAN leak (3B)"),
             ("t_ng_01", "lexical negative constraint 'force'"), ("t_ng_04", "lexical negative constraint 'balance'; v2 evasion"),
@@ -496,6 +668,236 @@ def _targeted_cases(recs: dict[str, list[dict]]) -> list[str]:
     return out
 
 
+def recovery_ci(recs: dict, raw: str, eng: str, inst: str, n_boot: int = 10000, seed: int = 0) -> dict:
+    """Post-training recovery (C_eng - C_raw) / (C_inst - C_raw) with a paired-bootstrap 95% CI over prompts."""
+    import random
+    by = {c: {r["prompt_id"]: 100.0 * r["metrics"]["composite"] for r in recs[c]} for c in (raw, eng, inst)}
+    ids = [i for i in by[raw] if i in by[eng] and i in by[inst]]
+
+    def ratio(sample: list[str]) -> float | None:
+        n = len(sample)
+        r, e, s = (sum(by[c][i] for i in sample) / n for c in (raw, eng, inst))
+        return (e - r) / (s - r) if s - r > 0 else None
+
+    rng = random.Random(seed)
+    boots = [ratio([rng.choice(ids) for _ in ids]) for _ in range(n_boot)]
+    ok = sorted(b for b in boots if b is not None)
+    return {"point": ratio(ids), "lo": ok[int(0.025 * len(ok))] if ok else None,
+            "hi": ok[int(0.975 * len(ok)) - 1] if ok else None, "undefined_frac": 1 - len(ok) / n_boot}
+
+
+def _diff_ci(recs: dict, a: str, b: str) -> str:
+    sa, sb = (100.0 * sum(r["metrics"]["composite"] for r in recs[c]) / len(recs[c]) for c in (a, b))
+    lo, hi = paired_bootstrap_ci(recs, a, b)
+    return f"{sb - sa:+.1f} [{lo:+.1f}, {hi:+.1f}]"
+
+
+def _recovery_table(rows: list[tuple[str, dict, str, str, str]]) -> list[str]:
+    """rows: (stack label, records, raw, engine, instruct). A ratio is reported only if its denominator is resolved."""
+    out = ["| Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |",
+           "|---|---|---|---|---|---|"]
+    for lab, recs, raw, eng, inst in rows:
+        if not all(c in recs for c in (raw, eng, inst)):
+            continue
+        rc = recovery_ci(recs, raw, eng, inst)
+        if rc["point"] is None:
+            rec = "undefined (Instruct ≤ raw base)"
+        elif rc["undefined_frac"] > 0.025:
+            rec = f"not resolved (point {100 * rc['point']:.0f}%; denominator ≤ 0 in {100 * rc['undefined_frac']:.0f}% of resamples)"
+        else:
+            rec = f"**{100 * rc['point']:.0f}%** [{100 * rc['lo']:.0f}%, {100 * rc['hi']:.0f}%]"
+        out.append(f"| {lab} | `{eng}` | `{inst}` | {_diff_ci(recs, raw, inst)} | {_diff_ci(recs, inst, eng)} | {rec} |")
+    return out
+
+
+def _negation_ids() -> set[str]:
+    """Calibration and test prompt ids whose instruction contains a parsed negation target."""
+    from engine.negation import parse_negations
+    ids = set()
+    for f in ("calibration_prompts.json", "test_prompts.json", "dev_prompts.json"):
+        for p in json.loads((ROOT / "data" / f).read_text()):
+            if any(n.targets for n in parse_negations(p["instruction"])):
+                ids.add(p["id"])
+    return ids
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def _phase4_analysis(summ: dict, recs: dict, irecs: dict, out_dir: Path) -> list[str]:
+    """Condition 11 (lean engine) and conditions 12-13 (post-trained reference) comparisons."""
+    if "11_engine_v2_2_lean" not in recs and not irecs:
+        return []
+    allrecs = {**recs, **irecs}
+    allsumm = {**summ, **{c: summarize(rs) for c, rs in irecs.items()}}
+    out = ["### Phase 4 (v2.2 lean engine, post-trained reference) comparisons", ""]
+    if "11_engine_v2_2_lean" in recs:
+        for ref in ("1_raw_base", "3_urial_3shot_prefix", "10_engine_v2_1", "x9_v2_1_minus_anti_echo"):
+            if ln := _cmp_line(allsumm, allrecs, f"v2.2 lean vs. `{ref}`", ref, "11_engine_v2_2_lean"):
+                out.append(ln)
+        if "x9_v2_1_minus_anti_echo" in recs:
+            x9 = {r["prompt_id"]: r for r in recs["x9_v2_1_minus_anti_echo"]}
+            same = [r["prompt_id"] for r in recs["11_engine_v2_2_lean"] if r["response"] == x9[r["prompt_id"]]["response"]]
+            diff = [r["prompt_id"] for r in recs["11_engine_v2_2_lean"] if r["prompt_id"] not in set(same)]
+            drift = {pid for pid, r in x9.items() if any(e.get("reason") == "drift" for e in r.get("stop_events", []))}
+            out.append(f"- **Byte identity with `x9`:** {len(same)}/{len(same) + len(diff)} responses identical. "
+                       f"{len(drift)} x9 prompts had a drift-stop EOS boost (the mechanism condition 11 drops); the "
+                       f"{len(diff)} differing prompts are {', '.join(f'`{d}`' for d in diff) or 'none'}"
+                       + (f", of which {len(set(diff) & drift)} had such a boost" if diff else "") + ".")
+    for inst in ("12_official_instruct_chat", "12_official_instruct_bare"):
+        if inst in allrecs:
+            if ln := _cmp_line(allsumm, allrecs, f"Post-training's own gain ({inst.rsplit('_', 1)[1]} frame)", "1_raw_base", inst):
+                out.append(ln)
+    rows = [(f"protocol, raw = `{raw}`", allrecs, raw, eng, inst)
+            for raw in ("1_raw_base", "2_raw_base_plus_stops")
+            for eng in ("10_engine_v2_1", "11_engine_v2_2_lean")
+            for inst in ("12_official_instruct_chat", "12_official_instruct_bare")]
+    rt = _recovery_table(rows)
+    if len(rt) > 2:
+        out += ["", "**Engine vs. post-training** (Composite points, 95% paired-bootstrap CIs; recovery = "
+                "(C_engine − C_raw) / (C_Instruct − C_raw), reported only when its denominator is resolved):", "", *rt, ""]
+    for frame in ("chat", "bare"):
+        a, b = f"12_official_instruct_{frame}", f"13_instruct_plus_orth_ban_{frame}"
+        if a in irecs and b in irecs:
+            if ln := _cmp_line(allsumm, allrecs, f"Sibling-orthogonal ban on Instruct ({frame} frame)", a, b):
+                out.append(ln)
+            na, nb = (_category_metric(allrecs, c, "negative_constraints", "constraint") for c in (a, b))
+            ra = {r["prompt_id"]: r for r in irecs[a]}
+            changed = [r["prompt_id"] for r in irecs[b] if r["response"] != ra[r["prompt_id"]]["response"]]
+            out.append(f"  - negative_constraints ConstraintScore {na:.1f}% → {nb:.1f}%; responses changed on "
+                       f"{len(changed)} prompts ({', '.join(f'`{c}`' for c in changed) or 'none'}).")
+    bench = _read_json(out_dir.parent / "speed_bench.json")
+    if bench:
+        out += ["", f"**Same-session decode speed** (`{bench['model']}`, {bench['n_prompts']} test prompts, conditions "
+                "interleaved prompt by prompt, `scripts/bench_speed.py`):", "",
+                "| Condition | tok/s | tok/s, negation prompts | tok/s, other prompts | ms/token | identical to log |",
+                "|---|---|---|---|---|---|"]
+        for c, o in bench["conditions"].items():
+            out.append(f"| `{c}` | {o['tok_per_s']:.2f} | {_fmt(o['tok_per_s_negation'], 2)} | {_fmt(o['tok_per_s_other'], 2)} "
+                       f"| {o['ms_per_token']:.1f} | {o['identical_to_log']}/{len(o['per_prompt'])} |")
+    return out + [""]
+
+
+def _mb(n_bytes: float) -> str:
+    return f"{n_bytes / 1e9:.2f} GB" if n_bytes >= 1e9 else f"{n_bytes / 1e6:.1f} MB"
+
+
+def unit_economics(out_dir: Path, summ: dict, recs: dict, irecs: dict, run: dict) -> list[str]:
+    """One row per way of getting assistant behaviour: what it costs and what it buys (also used by the blog post)."""
+    if not irecs:
+        return []
+    slug = out_dir.parent.name
+    tax = _read_json(out_dir.parent / "alignment_tax.json").get("summary", {})
+    delta = _read_json(ROOT / "results" / (slug + INSTRUCT_SUFFIX) / "weight_delta.json")
+    bench = _read_json(out_dir.parent / "speed_bench.json").get("conditions", {})
+    long = {c: summarize(rs) for c, rs in _variant_recs(out_dir, "_512tok").items()}
+    art = ROOT / "artifacts" / slug / "calib80" / "calibration.pt"
+    secs = (run.get("calibration_meta") or {}).get("calibration_seconds")
+    calib = f"{secs / 60:.0f} min of forward passes on 80 prompts" if secs else "not recorded for this model"
+    isumm = {c: summarize(rs) for c, rs in irecs.items()}
+    post = "SFT on > 1M examples + multi-stage RL; compute not disclosed"
+    wchg = f"{100 * delta['params_changed_frac']:.1f}% of {delta['params'] / 1e9:.2f}B" if delta else "all"
+    wsize = f"{_mb(delta['instruct_weights_bytes'])} (whole checkpoint)" if delta else "whole checkpoint"
+
+    per = _read_json(out_dir.parent / "alignment_tax.json").get("per_text", {}).get("heldout", {})
+    neg = _negation_ids()
+
+    def kl(c: str) -> str:
+        if c == "1_raw_base":
+            return "0 (reference)"
+        held = tax.get("heldout", {}).get(c)
+        if not held:
+            return "–"
+        rs = [r for r in per.get(c, []) if r["id"] not in neg]
+        n = sum(r["n"] for r in rs)
+        return f"{held['mean_kl']:.3f} / {sum(r['kl_sum'] for r in rs) / n:.3f}" if n else f"{held['mean_kl']:.3f}"
+
+    rows = [
+        ("Raw base", "1_raw_base", summ, "0", "–", "none"),
+        ("URIAL 3-shot prefix", "3_urial_3shot_prefix", summ, "0", "768-token prompt", "none"),
+        ("Static CAA", "4_static_caa", summ, "0", f"{_mb(art.stat().st_size)} (same artifact)", calib),
+        ("**Engine v2.1**", "10_engine_v2_1", summ, "0", _mb(art.stat().st_size), calib),
+        ("**Engine v2.2 lean** (test-informed)", "11_engine_v2_2_lean", summ, "0", _mb(art.stat().st_size), calib),
+        ("Official Instruct, chat template", "12_official_instruct_chat", isumm, wchg, wsize, post),
+        ("Official Instruct, bare frame", "12_official_instruct_bare", isumm, wchg, wsize, post),
+        ("Instruct + sibling-orth ban, chat", "13_instruct_plus_orth_ban_chat", isumm, wchg, wsize + " + 0", post),
+    ]
+    lines = ["| Approach | Weights changed | Artifact / weight delta | One-off cost | Extra context tokens | Clean-token KL, "
+             "held-out: all / no-negation prompts (nats) | Composite, 160 tokens | Composite, 512 tokens | tok/s |",
+             "|" + "---|" * 9]
+    for label, c, src, w, size, cost in rows:
+        if c not in src:
+            continue
+        s = src[c]
+        speed = bench[c]["tok_per_s"] if c in bench else s["tok_per_s"]
+        lines.append(f"| {label} (`{c}`) | {w} | {size} | {cost} | {s['extra_prompt_tokens']:.0f} | {kl(c)} "
+                     f"| **{s['composite']:.1f}** | {_fmt(long[c]['composite']) if c in long else '–'} | {speed:.1f} |")
+    return lines
+
+
+def _economics_section(out_dir: Path, summ: dict, recs: dict, irecs: dict, run: dict) -> list[str]:
+    ue = unit_economics(out_dir, summ, recs, irecs, run)
+    if not ue:
+        return []
+    tax = _read_json(out_dir.parent / "alignment_tax.json")
+    isumm = {c: summarize(rs) for c, rs in irecs.items()}
+    out = ["## 7. Economics versus post-training (Phase 4)", "",
+           "### Unit economics", "", *ue, "",
+           "- **Weights changed / size.** The engine edits no weights; its artifact is the calibration file read by the "
+           "hooks. The Instruct row compares every bf16 tensor of the two public checkpoints "
+           "(`scripts/weight_delta.py`).",
+           "- **Clean-token KL.** Mean D_KL(P_raw ‖ P_condition) in nats per token, teacher-forced at steps t > 4 on "
+           "URIAL's clean answers to the test prompts (`eval/alignment_tax.py`; the calibration-answer version is in the "
+           "detail table below). *no-negation* drops the 8 prompts with a parsed negation, where the lexical ban "
+           "suppresses words the teacher answer uses by design. Lower means the condition leaves the base model's "
+           "predictions on good assistant text more intact. It is a distance, not a quality score: Instruct is "
+           "*meant* to move the distribution. The single-pass vs. step-by-step numerical floor of the raw base is "
+           + (f"{tax['summary']['calibration']['raw_base_single_pass']['mean_kl']:.4f}" if tax else "–") + " nats.",
+           "- **Composite, 512 tokens** reruns the same prompts with a 512-token budget (tag `test40_512tok`). "
+           "Instruct writes longer answers, and the 160-token cap cuts many of them mid-sentence, which fails CleanStop.",
+           "- **Stack.** Every row ran in bf16 on the steer_eager (HF-eager) attention, which Module 4 needs. The SDPA "
+           "rows of the sensitivity table quantify what that costs the attention-agnostic conditions.",
+           "- **tok/s** for conditions 2, 7, 10, x9 and 11 is the same-session benchmark; other rows are from their logs.",
+           "- **One-off cost** for Instruct is the Qwen2.5 technical report's description of post-training (arXiv "
+           "2412.15115); the engine's is measured wall time on the M4 Pro (trajectory generation and state collection).", ""]
+    if isumm:
+        out += ["### Post-trained reference conditions (all values in %)", "", *_summary_table(isumm), "",
+                "Stop reasons (eos / stop_string / max_tokens): " + "; ".join(
+                    f"`{c}` {s['stop_reasons']['eos']}/{s['stop_reasons']['stop_string']}/{s['stop_reasons']['max_tokens']}"
+                    for c, s in isumm.items()), "",
+                "### Composite by category, engine vs. Instruct (%)", "",
+                *_category_table({**{c: recs[c] for c in ("1_raw_base", "10_engine_v2_1", "11_engine_v2_2_lean") if c in recs},
+                                  **irecs}, "composite"), ""]
+    out += _sensitivity(out_dir)
+    if tax:
+        neg = _negation_ids()
+
+        def pooled(rows: list[dict], keep) -> float | None:
+            rs = [r for r in rows if keep(r["id"])]
+            n = sum(r["n"] for r in rs)
+            return sum(r["kl_sum"] for r in rs) / n if n else None
+
+        out += ["### Clean-token KL distortion in detail", "",
+                "Mean KL is pooled over tokens; *median answer* is the median of per-answer means; *no negation* pools "
+                "only answers to prompts without a parsed negation (on the others the engine's lexical ban suppresses "
+                "words the teacher answer uses, by design).", "",
+                "| Condition | KL, calib | KL, held-out | median answer, calib / held-out | no negation, calib / held-out | "
+                "KL t ≤ 4, calib | top-1 agreement, calib / held-out |", "|---|---|---|---|---|---|---|"]
+        for c, v in tax["summary"]["calibration"].items():
+            h = tax["summary"].get("heldout", {}).get(c, {})
+            pc, ph = tax["per_text"]["calibration"][c], tax["per_text"].get("heldout", {}).get(c, [])
+            nn = f"{_fmt(pooled(pc, lambda i: i not in neg), 4)} / {_fmt(pooled(ph, lambda i: i not in neg), 4)}"
+            out.append(f"| `{c}` | {v['mean_kl']:.4f} | {_fmt(h.get('mean_kl'), 4)} | {v['median_text_kl']:.4f} / "
+                       f"{_fmt(h.get('median_text_kl'), 4)} | {nn} | {v['mean_kl_early']:.3f} | "
+                       f"{100 * v['top1_agree']:.1f}% / {_fmt(100 * h['top1_agree'] if h else None)}% |")
+        cal = tax["summary"]["calibration"]
+        out += ["", f"{cal['raw_base_single_pass']['n_texts']} calibration answers ({cal['raw_base_single_pass']['n_tokens']} "
+                f"tokens at t > 4) and {tax['summary'].get('heldout', {}).get('raw_base_single_pass', {}).get('n_texts', 0)} "
+                f"held-out answers ({tax['summary'].get('heldout', {}).get('raw_base_single_pass', {}).get('n_tokens', 0)} tokens).", ""]
+    return out
+
+
 def write_report(out_dir: Path, path: Path, appendix_dirs: list[Path] | None = None) -> None:
     summary, recs = _load(out_dir)
     run = summary["run"]
@@ -505,6 +907,7 @@ def write_report(out_dir: Path, path: Path, appendix_dirs: list[Path] | None = N
     meta = run.get("calibration_meta", {})
     hpm = run.get("hparams_meta") or {}
     pins = diag.get("pin_heads", {}).get("selected", [])
+    irecs = _load_instruct(out_dir)
 
     L: list[str] = [
         f"# RESULTS — Zero-Weight-Update Assistant Engine on `{run['model']}`", "",
@@ -535,6 +938,7 @@ def write_report(out_dir: Path, path: Path, appendix_dirs: list[Path] | None = N
         "### ConstraintScore (%)", "", *_category_table(ordered, "constraint"), "",
         "## 3. Which modules contributed, and why", "", *_analysis(summ, ordered, diag), "",
         *_phase2_analysis(summ, ordered, run), *_phase3_analysis(summ, ordered, run),
+        *_phase4_analysis(summ, ordered, irecs, out_dir),
     ]
     notes = out_dir / "analysis_notes.md"
     if notes.exists():
@@ -542,11 +946,13 @@ def write_report(out_dir: Path, path: Path, appendix_dirs: list[Path] | None = N
     L += _methodology(run, diag)
     L += _methodology_v2(run, diag, ordered)
     L += _methodology_v21(run, ordered)
+    L += _methodology_v22(run, ordered, irecs)
     L += ["## 4. Calibration diagnostics (per target layer)", "", *_diag_table(diag), "",
           "### Coefficients", "", *_hparam_table(run), "",
           "## 5. Qualitative side-by-side examples (verbatim)", "",
           "Outputs are shown exactly as returned after stop-string truncation and whitespace stripping.", "",
-          *_examples(ordered), *_targeted_cases(ordered)]
+          *_examples(ordered), *_targeted_cases(ordered), *_economics_section(out_dir, summ, ordered, irecs, run),
+          *_instruct_cases(ordered, irecs)]
     if appendix_dirs:
         app = _appendix(appendix_dirs)
         if app:

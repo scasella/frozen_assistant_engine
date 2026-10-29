@@ -176,3 +176,104 @@ effect: it recovers v1's drift suppression without v1's loops. Sibling orthogona
 collateral cost of output-side lexical suppression. The drift-coupled stop and the anti-echo guard add nothing
 detectable here. Negative lexical constraints remain the weakest category at 75% for condition 10 on both models, and
 the verifier cannot tell an evasive non-answer from a compliant one.
+
+### Phase 4 interpretation (v2.2 lean engine and the post-trained reference; hand-written after inspecting the logs)
+
+**Condition 11 is an execution-cost result, not a new accuracy result.**
+- **Exactness.** `results/lean_equivalence_checks.txt` records two checks:
+  - the sync-free sibling projection reproduces x9 byte for byte on 40/40 prompts on both models;
+  - the text-only boundary trigger matches x9 on 39/40 on both models. The exception on both is `t_rm_05`, where the
+    v2.1 score clause had opened a boundary window.
+- **Where 11 differs from x9.** Every response where condition 11 differs from x9 is on a prompt where x9's
+  drift-assisted stop fired: 3/40 on 3B (`t_qa_05`, `t_rm_05`, `t_rm_06`) and 1/40 on 1.5B (`t_cd_01`). Only 3B
+  `t_rm_05` changes a metric: x9 ended it with the `[Reasoning: …]` tag the verifier does not flag, while 11 runs to
+  the token cap. Hence 95.6 against x9's 96.2. On 1.5B both score 86.2.
+- **Speed.** In the same session (`speed_bench.json`, conditions interleaved prompt by prompt, every output
+  byte-identical to its log), condition 11 decodes:
+  - **24.30 tok/s on 3B**, against 24.81 for condition 7 (−2.1%) and 23.31 for condition 10 (−6.0%);
+  - **39.02 tok/s on 1.5B**, against 39.82 (−2.0%) and 37.29 (−6.4%).
+
+  On the 32 prompts without a negation it is indistinguishable from condition 7 (24.76 vs. 24.81; 39.81 vs. 39.81).
+  On the 8 negation prompts the remaining cost is the second, word-only vocabulary product: 22.86 against 24.80 on
+  3B, up from 20.47 under condition 10.
+- **Where the "12%" came from.** The brief's 12% overhead compared logs generated hours apart. Measured in one session
+  the v2.1 overhead was 6%, so about half of the logged gap was session drift.
+- **Not a held-out estimate.** The mechanism set came from test leave-one-outs. On the 1.5B dev set condition 11
+  scored 95.0, against condition 10's reproduced 93.3 (one prompt's CleanStop). Dev does not contradict the
+  simplification, but nothing was selected from it.
+
+**Against the official post-trained checkpoints: a token-budget effect at 160 tokens, parity at 512.**
+- **At the protocol's 160 tokens (3B), the engine wins.**
+  - Condition 10 beats Qwen2.5-3B-Instruct by +8.1 [+1.9, +14.4] with Instruct's chat template, and by +12.5
+    [+6.2, +18.8] in the bare frame.
+  - But Instruct's own gain over the raw base is not resolved (+5.6 [−1.2, +12.5]), so the brief's recovery ratio
+    has no meaningful value at this budget.
+- **Why Instruct scores low at 160 tokens.** All 14 of its non-negation failures are answers cut by the cap.
+  Qwen2.5-Instruct writes thorough markdown (214 tokens per answer when allowed 512, against the engine's 82). With
+  its chat template it shows zero contamination. In the bare frame even Instruct drifts like a base model on 2/40
+  prompts (a FLAN `single-select problem` block, an `A:` turn), so its post-training is tied to the template.
+- **With a 512-token budget (tag `test40_512tok`), the comparison is fair, and it is parity.**
+  - Instruct-chat ends on its own on 37/40 prompts and scores 94.4; post-training's gain is now resolved, +15.6
+    [+8.8, +22.5].
+  - Condition 10 scores 96.2 (CleanStop 100%, no cap hits): engine − Instruct = +1.9 [−1.9, +5.6], and recovery is
+    **112% [87%, 150%]**. Condition 11 recovers 108% [76%, 157%].
+  - The raw base does not improve with room (78.8), because it uses the extra tokens to drift.
+  - **On 1.5B, Instruct leads at 512 tokens.** Instruct-chat scores 90.0 against the engine's 87.5, so engine −
+    Instruct = −2.5 [−10.0, +4.4] and recovery is 85% [40%, 135%]. That comparison runs on the eager-bf16 stack,
+    which depresses 1.5B arithmetic (see Numerics below), so it is pessimistic for the engine, but it is not parity.
+  - On these 40 prompts and four programmatic checks, the engine buys essentially all of what post-training buys,
+    with 0 changed weights, a 3.0 MB artifact, 0 extra prompt tokens and 2.6× shorter answers.
+  - This is not a claim about general assistant quality. The checks do not measure helpfulness, depth, safety or
+    multi-turn behaviour, where post-training does work the engine never attempts.
+- **The 512-token budget** was planned as a sensitivity check of the cap once Instruct's truncations were seen,
+  before any 512-token output existed. No coefficient or condition was chosen from it.
+
+**Condition 13: the lexical operator adds value on top of post-training.**
+- **3B, chat template.**
+  - The ban raises negative_constraints ConstraintScore from 37.5% to 87.5% at 160 tokens (Composite +2.5
+    [+0.6, +5.0]), and Instruct + ban is the best condition at 512 tokens: 97.5, +3.1 [+0.6, +6.2] over Instruct.
+  - It fixes `t_ng_01`, `t_ng_02`, `t_ng_06` and `t_ng_07`, and breaks nothing.
+  - Instruct's characteristic failure is echoing the banned word while restating the constraint ("Here are three
+    programming languages without mentioning Python:").
+  - Two "fixes" are evasions rather than better answers: "without mentioning any language that includes the word
+    "Py"" and "without mentioning the specific ones you requested to be avoided".
+- **1.5B, chat template.** The ban raises ConstraintScore from 37.5% to 75.0%, but Composite only by +0.6 [−4.4, +4.4]:
+  - `t_ng_02` collapses into a loop ("…not related to the question of not being related to the question…");
+  - `t_ng_03` gains a factual error the verifier passes: the ocean as a "salt-and-sugar-rich liquid".
+- **Untouched prompts.** The 32 prompts without a parsed negation are byte-identical to condition 12, as they must be.
+  Nothing was tuned on Instruct: γ, K and the fallback are the frozen base-model dev values.
+
+**Alignment tax: the engine barely moves the base distribution except where it bans a word.**
+- **Measured as:** clean-token KL D_KL(P_raw ‖ P_condition) at t > 4 along URIAL's clean held-out test answers.
+- **3B.**
+  - The engine's mean is 0.124 nats/token, but its median answer is 0.008. About two thirds of the total comes from
+    three negation prompts, where the ban suppresses words the teacher answer uses ("trees", "computers").
+  - Without the 8 negation prompts the engine is at **0.014 nats/token** with 97% top-1 agreement. That compares with
+    URIAL 0.064, static CAA 0.081, Instruct in the bare frame 0.186 and **Instruct with its chat template 0.576** (81%
+    top-1 agreement).
+- **1.5B.** Same ordering: engine 0.023–0.024 vs. Instruct-chat 0.213 without negations.
+- **What the measure is and is not.** It is a distance, not a quality score: post-training is *supposed* to move the
+  distribution. The claim is only that the engine reaches the same scores while leaving the base model's next-token
+  predictions on good assistant text essentially intact (calibration answers, in-sample for the engine: 0.014 vs.
+  0.432).
+
+**Numerics: the eager-bf16 attention that Module 4 needs costs Qwen2.5-1.5B its arithmetic.**
+- **The finding.** On 1.5B the raw base solves 3/8 math prompts on the protocol stack and **8/8** with HF's SDPA
+  attention (Composite 75.6 → 81.2). Errors look like "15 + 9 = 14" and "$50 − $28 = $42".
+- **Cause.**
+  - HF's own eager attention gives the identical wrong digits in bf16 on CPU, and `steer_eager` is bit-identical to
+    it on MPS.
+  - SDPA in bf16 and eager attention in fp32 are both correct.
+  - So the eager path's bf16 rounding of the pre-softmax scores is the cause.
+- **Scope.**
+  - Every 1.5B number in this report, the v2.1.0 release included, is depressed by this. The comparisons stay fair
+    among themselves (one shared stack), but the 1.5B *level* is not representative.
+  - 3B is not visibly affected: math is 8/8 under both stacks, and the raw base scores 80.6 vs. 78.8.
+- **Pre-registered rule.** Fixed before the SDPA runs: if 3B Instruct-chat moved by more than 2 points under SDPA, the
+  SDPA Instruct would become the recovery denominator.
+  - It moved 0.6 (86.2 → 85.6), so the protocol comparison stays primary.
+  - On 1.5B, Instruct-chat did not move (84.4) while the raw base gained 5.6. The 1.5B recovery figures are
+    confounded by numerics and should not be quoted.
+- **Throughput.** SDPA is also faster: the raw base runs at 29.5 vs. 26.1 tok/s on 3B, and 48.9 vs. 39.4 on 1.5B. Part
+  of the engine's throughput gap to Instruct is the eager attention its Module-4 bias needs, not the hooks. A fused
+  attention kernel with an additive bias would remove it; that is untested here.

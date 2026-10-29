@@ -34,8 +34,9 @@ No weights were modified and no gradients were computed: every condition runs th
 | `x7_v2_1_minus_drift_stop` | 100.0 | 67.5 | 87.5 | 90.0 | **86.2** | 72.5 | 0 | 27.2 | 36.7 | 77 |
 | `x8_v2_1_minus_sibling_orth` | 100.0 | 65.0 | 75.0 | 77.5 | **79.4** | 57.5 | 0 | 26.1 | 38.4 | 88 |
 | `x9_v2_1_minus_anti_echo` | 100.0 | 70.0 | 85.0 | 90.0 | **86.2** | 70.0 | 0 | 26.9 | 37.2 | 77 |
+| `11_engine_v2_2_lean` | 100.0 | 70.0 | 85.0 | 90.0 | **86.2** | 70.0 | 0 | 26.3 | 38.1 | 77 |
 
-Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 31/0/9; `2_raw_base_plus_stops` 31/5/4; `3_urial_3shot_prefix` 16/8/16; `4_static_caa` 8/15/17; `5_lifecycle_plus_nullspace` 27/6/7; `6_full_assistant_engine` 27/6/7; `x1_lifecycle_only` 27/6/7; `x2_lifecycle_plus_erase` 23/6/11; `x3_full_minus_dynamic_stop` 25/7/8; `x4_pin_attention_only` 32/4/4; `x5_full_minus_erase` 25/5/10; `7_engine_v2_hinge_erase` 24/7/9; `8_engine_v2_signed_attn` 23/7/10; `9_engine_v2_full` 24/6/10; `10_engine_v2_1` 29/6/5; `x6_v2_1_minus_boundary_hinge` 27/6/7; `x7_v2_1_minus_drift_stop` 29/6/5; `x8_v2_1_minus_sibling_orth` 23/7/10; `x9_v2_1_minus_anti_echo` 28/6/6
+Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 31/0/9; `2_raw_base_plus_stops` 31/5/4; `3_urial_3shot_prefix` 16/8/16; `4_static_caa` 8/15/17; `5_lifecycle_plus_nullspace` 27/6/7; `6_full_assistant_engine` 27/6/7; `x1_lifecycle_only` 27/6/7; `x2_lifecycle_plus_erase` 23/6/11; `x3_full_minus_dynamic_stop` 25/7/8; `x4_pin_attention_only` 32/4/4; `x5_full_minus_erase` 25/5/10; `7_engine_v2_hinge_erase` 24/7/9; `8_engine_v2_signed_attn` 23/7/10; `9_engine_v2_full` 24/6/10; `10_engine_v2_1` 29/6/5; `x6_v2_1_minus_boundary_hinge` 27/6/7; `x7_v2_1_minus_drift_stop` 29/6/5; `x8_v2_1_minus_sibling_orth` 23/7/10; `x9_v2_1_minus_anti_echo` 28/6/6; `11_engine_v2_2_lean` 28/6/6
 
 ## 2. Per-category breakdown
 
@@ -62,6 +63,7 @@ Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 31/0/9; `2_raw_base_
 | `x7_v2_1_minus_drift_stop` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
 | `x8_v2_1_minus_sibling_orth` | 93.8 | 84.4 | 56.2 | 71.9 | 90.6 |
 | `x9_v2_1_minus_anti_echo` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
+| `11_engine_v2_2_lean` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
 
 ### ConstraintScore (%)
 
@@ -86,6 +88,7 @@ Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 31/0/9; `2_raw_base_
 | `x7_v2_1_minus_drift_stop` | 100.0 | 37.5 | 75.0 | 50.0 | 75.0 |
 | `x8_v2_1_minus_sibling_orth` | 100.0 | 37.5 | 62.5 | 50.0 | 75.0 |
 | `x9_v2_1_minus_anti_echo` | 100.0 | 37.5 | 87.5 | 50.0 | 75.0 |
+| `11_engine_v2_2_lean` | 100.0 | 37.5 | 87.5 | 50.0 | 75.0 |
 
 ## 3. Which modules contributed, and why
 
@@ -143,6 +146,44 @@ Conditions 8 and 9 build on `7_engine_v2_hinge_erase`, the better of x5 / 7 on t
 - **negative_constraints ConstraintScore**: `6_full_assistant_engine` 25.0% → `7_engine_v2_hinge_erase` 25.0% → `9_engine_v2_full` 87.5% → `10_engine_v2_1` 75.0%.
 - **Mechanism activity on these prompts (condition 10):** EOS boosts by reason centroid 21, drift 12, newturn 6; boundary-window steps 432; unembedding projections 889 (sibling fallbacks 0); prompts with an anti-echo set 8.
 
+### Phase 4 (v2.2 lean engine, post-trained reference) comparisons
+
+- **v2.2 lean vs. `1_raw_base`** (`1_raw_base` → `11_engine_v2_2_lean`): Composite **+10.6** [+3.1, +18.1] (TurnCross +0.0, Constraint +15.0, CleanStop +30.0, Fluency -2.5, NaturalEOS -7.5).
+- **v2.2 lean vs. `3_urial_3shot_prefix`** (`3_urial_3shot_prefix` → `11_engine_v2_2_lean`): Composite **+5.6** [-3.8, +14.4] (TurnCross +0.0, Constraint +10.0, CleanStop +22.5, Fluency -10.0, NaturalEOS +30.0).
+- **v2.2 lean vs. `10_engine_v2_1`** (`10_engine_v2_1` → `11_engine_v2_2_lean`): Composite **+0.0** [-3.8, +3.8] (TurnCross +0.0, Constraint +2.5, CleanStop -2.5, Fluency +0.0, NaturalEOS -2.5).
+- **v2.2 lean vs. `x9_v2_1_minus_anti_echo`** (`x9_v2_1_minus_anti_echo` → `11_engine_v2_2_lean`): Composite **+0.0** [+0.0, +0.0] (TurnCross +0.0, Constraint +0.0, CleanStop +0.0, Fluency +0.0, NaturalEOS +0.0).
+- **Byte identity with `x9`:** 39/40 responses identical. 10 x9 prompts had a drift-stop EOS boost (the mechanism condition 11 drops); the 1 differing prompts are `t_cd_01`, of which 1 had such a boost.
+- **Post-training's own gain (chat frame)** (`1_raw_base` → `12_official_instruct_chat`): Composite **+8.8** [+2.5, +15.0] (TurnCross +0.0, Constraint +7.5, CleanStop +20.0, Fluency +7.5, NaturalEOS -12.5).
+- **Post-training's own gain (bare frame)** (`1_raw_base` → `12_official_instruct_bare`): Composite **-4.4** [-12.5, +4.4] (TurnCross +0.0, Constraint +7.5, CleanStop -17.5, Fluency -7.5, NaturalEOS -52.5).
+
+**Engine vs. post-training** (Composite points, 95% paired-bootstrap CIs; recovery = (C_engine − C_raw) / (C_Instruct − C_raw), reported only when its denominator is resolved):
+
+| Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |
+|---|---|---|---|---|---|
+| protocol, raw = `1_raw_base` | `10_engine_v2_1` | `12_official_instruct_chat` | +8.8 [+2.5, +15.0] | +1.9 [-6.9, +10.6] | **121%** [33%, 357%] |
+| protocol, raw = `1_raw_base` | `10_engine_v2_1` | `12_official_instruct_bare` | -4.4 [-12.5, +4.4] | +15.0 [+5.6, +23.8] | undefined (Instruct ≤ raw base) |
+| protocol, raw = `1_raw_base` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +8.8 [+2.5, +15.0] | +1.9 [-6.2, +10.0] | **121%** [38%, 360%] |
+| protocol, raw = `1_raw_base` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -4.4 [-12.5, +4.4] | +15.0 [+5.6, +24.4] | undefined (Instruct ≤ raw base) |
+| protocol, raw = `2_raw_base_plus_stops` | `10_engine_v2_1` | `12_official_instruct_chat` | +3.8 [-2.5, +10.0] | +1.9 [-6.9, +10.6] | not resolved (point 150%; denominator ≤ 0 in 15% of resamples) |
+| protocol, raw = `2_raw_base_plus_stops` | `10_engine_v2_1` | `12_official_instruct_bare` | -9.4 [-17.5, -1.2] | +15.0 [+5.6, +23.8] | undefined (Instruct ≤ raw base) |
+| protocol, raw = `2_raw_base_plus_stops` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +3.8 [-2.5, +10.0] | +1.9 [-6.2, +10.0] | not resolved (point 150%; denominator ≤ 0 in 15% of resamples) |
+| protocol, raw = `2_raw_base_plus_stops` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -9.4 [-17.5, -1.2] | +15.0 [+5.6, +24.4] | undefined (Instruct ≤ raw base) |
+
+- **Sibling-orthogonal ban on Instruct (chat frame)** (`12_official_instruct_chat` → `13_instruct_plus_orth_ban_chat`): Composite **+0.6** [-4.4, +4.4] (TurnCross +0.0, Constraint +7.5, CleanStop -2.5, Fluency -2.5, NaturalEOS -2.5).
+  - negative_constraints ConstraintScore 37.5% → 75.0%; responses changed on 8 prompts (`t_ng_01`, `t_ng_02`, `t_ng_03`, `t_ng_04`, `t_ng_05`, `t_ng_06`, `t_ng_07`, `t_ng_08`).
+- **Sibling-orthogonal ban on Instruct (bare frame)** (`12_official_instruct_bare` → `13_instruct_plus_orth_ban_bare`): Composite **+4.4** [+0.0, +10.0] (TurnCross +0.0, Constraint +15.0, CleanStop +0.0, Fluency +2.5, NaturalEOS +0.0).
+  - negative_constraints ConstraintScore 12.5% → 87.5%; responses changed on 8 prompts (`t_ng_01`, `t_ng_02`, `t_ng_03`, `t_ng_04`, `t_ng_05`, `t_ng_06`, `t_ng_07`, `t_ng_08`).
+
+**Same-session decode speed** (`Qwen/Qwen2.5-1.5B`, 40 test prompts, conditions interleaved prompt by prompt, `scripts/bench_speed.py`):
+
+| Condition | tok/s | tok/s, negation prompts | tok/s, other prompts | ms/token | identical to log |
+|---|---|---|---|---|---|
+| `2_raw_base_plus_stops` | 40.78 | 41.08 | 40.69 | 24.5 | 40/40 |
+| `7_engine_v2_hinge_erase` | 39.82 | 39.84 | 39.81 | 25.1 | 40/40 |
+| `10_engine_v2_1` | 37.29 | 30.15 | 39.23 | 26.8 | 40/40 |
+| `x9_v2_1_minus_anti_echo` | 37.46 | 30.99 | 39.17 | 26.7 | 40/40 |
+| `11_engine_v2_2_lean` | 39.02 | 35.66 | 39.81 | 25.6 | 40/40 |
+
 ## Methodology notes and caveats
 
 - **Drift / turn markers used by CleanStop and TurnCross** (line-anchored, case-insensitive, applied identically to every condition): new-turn labels `Question[ n]:` / `Q:` / `Q1.` / `[Question]` / `[Answer]` / `User:` / `Human:` / `Assistant:` / `A:`; forum boilerplate (`Posted by`, `N comments`, `Share |`, `Related links/questions`, `Reply`, `Upvote`, `Tags:`, `Asked by`, `See also:` …); and instruction-dataset templates leaking from pretraining (`A single-select problem`, `Available options:`, `Options are:`, `Choose your answer`, `Pick your answer`, `(a). yes`-style option lines, hallucinated `You are a helpful assistant`). The template/bracket/`A:` markers were added after inspecting the calibration negatives (Y⁻) and the 1.5B smoke-test outputs, because the raw Qwen2.5 base model's dominant failure is appending FLAN-style option blocks. All metrics are re-scored from the logged response text whenever this report is generated, so every condition is judged by the same final detector. The TurnCross *echo* rule was also tightened after inspecting test outputs: a response fails only if its opening reproduces ≥90% of the instruction's words and either starts with the same word (literal re-typing) or contains nothing beyond the restatement. The first, fuzzier version (first-line similarity > 0.8) mis-flagged assistant preambles such as "Here is the SQL query to find …" and math answers that restate the premise. The change only removed false positives, and it moved at most one prompt per condition.
@@ -180,6 +221,30 @@ Conditions 8 and 9 build on `7_engine_v2_hinge_erase`, the better of x5 / 7 on t
   - κ_boundary 1.0 → 1.5 moved dev from 85.0 to 91.7, and κ_boundary 2.0 scored 90.0;
   - sibling K = 4 beat K = 8 (93.3 vs. 91.7), a single-prompt difference.
   Dev composites: `7_engine_v2_hinge_erase` 91.7, `9_engine_v2_full` 91.7, `10_engine_v2_1` 93.3.
+
+### Phase 4 (v2.2 lean engine and post-trained reference) methodology
+
+- **Condition 11 (`11_engine_v2_2_lean`)** keeps the two v2.1 mechanisms that the leave-one-outs credit: the boundary-coupled hinge (κ_boundary = 1.5) and the sibling-orthogonalised projection (K = 4, γ = 1.5, centred). It drops the drift-assisted stop and the anti-echo guard. It has no new coefficients, and the stop check still starts at t ≥ 6 as in v2.1. **Its mechanism set was chosen from the test-set leave-one-outs, so its test score is not a held-out estimate.** Condition 10 remains the dev-selected headline.
+- **Lean execution (`boundary_trigger = "text"`, `sibling_fast = True`):**
+  - **Text-only boundary trigger.** The boundary window opens only when the last generated token contains `. ! ? \n`, or within 2 steps after a newline. The v2.1 score clause is dropped, so the stop-layer completion score is computed only on stop-check steps (punctuation tokens), as in condition 7. No other step has an extra host sync.
+  - **Sync-free projection.** The sibling-orthogonalised projection computes the same arithmetic without host synchronisation: the fallback and Gram-Schmidt branches are `torch.where` selections, and the trace counters stay on device until the answer ends.
+  - **Smaller sibling search.** The sibling search multiplies only the pre-indexed word-token rows of the unembedding (tokens containing an ASCII letter; 61.8% of Qwen2.5's vocabulary) instead of the whole vocabulary.
+- **Why a second vocabulary product remains.**
+  - The siblings are the top-K tokens of the *unprojected* logits, while the emitted logits must come from the *projected* state, so an exact implementation reads the unembedding twice on negation prompts.
+  - Applying the update in logit space (`logits + W·Δh`) does not avoid this: `W·Δh` is itself a full-vocabulary product.
+  - Any re-association that is not bit-identical in bf16 changes greedy outputs at near-ties.
+  - The lean path therefore keeps the exact computation, makes the search product 38% smaller, and removes the synchronisation stalls, which `scripts/bench_speed.py` shows were most of the cost.
+- **Post-trained reference (conditions 12 and 13).** The official `-Instruct` checkpoints were run on the same 40 prompts with the same greedy loop, `max_new_tokens = 160`, stop strings and frozen verifiers.
+  - **Frames.** `_bare` uses the identical `Question: {instruction}\nAnswer:` frame. `_chat` uses the checkpoint's chat template, which includes Qwen's default system prompt; its *Extra ctx tokens* column counts the template's overhead over the bare frame.
+  - **Turn endings.** Generation ends on either turn-ending id in the checkpoint's `generation_config` (`<|im_end|>`, `<|endoftext|>`).
+  - **Decoding.** Qwen's recommended sampling settings (temperature 0.7, top-p 0.8, repetition penalty 1.05) are *not* used: every condition decodes greedily.
+- **Condition 13** attaches only condition 11's lexical operator to the Instruct checkpoint. It uses the same frozen base-dev coefficients and no calibration artifact, and nothing was tuned on Instruct. It can only change the 8 prompts that contain a parsed negation.
+- **Post-training recovery** is (C_engine − C_raw) / (C_Instruct − C_raw), with a 95% paired-bootstrap CI over prompts (10k resamples). The headline uses the raw base without stop strings (condition 1), as in every other comparison; the version over condition 2 (with stop strings) is listed too.
+- **Frozen verifiers.** The verifiers were written for base-model failure modes and were not changed for Instruct outputs. In particular, CleanStop fails answers that hit the 160-token cap mid-sentence, which penalises verbose answers.
+- **Sensitivity runs** (separate tags, never mixed with the protocol logs):
+  - `test40_512tok` reruns conditions 1, 10, 11, 12 and 13 (chat) with `max_new_tokens = 512`. It was planned after seeing Instruct's 160-token truncations and before any 512-token output existed. Its latencies are not comparable: part of it ran alongside the 1.5B KL job.
+  - `test40_sdpa` reruns conditions 1, 2, 12 and 13 (chat) on HF's SDPA attention. The engine conditions cannot run there: SDPA has no slot for the Module-4 bias, and `AssistantEngine` refuses `pin_attention` without `steer_eager`.
+- **Clean-token KL** (`eval/alignment_tax.py`). Each condition is teacher-forced along the same clean answers; engine conditions replay them one token per pass with the full per-step schedule, including the EOS boosts and the lexical ban. The reference is the raw base in the bare frame, decoded step by step. The answers are URIAL-teacher text in the base model's style, not Instruct-style text.
 
 ## 4. Calibration diagnostics (per target layer)
 
@@ -938,4 +1003,697 @@ Step-by-step reasoning process: x + 7 = 19 x + 7 - 7 = 19 - 7 x = 12 3x = 3 * 12
 
 ~~~text
 Step-by-step reasoning process: x + 7 = 19 x + 7 - 7 = 19 - 7 x = 12 3x = 3 * 12 = 6. The story above is based on a real event. The person who was robbed was a 12-year-old boy. The robber was a 17-year-old boy. The robber was caught and sent to prison. The robber was sent to prison because he was a juvenile delinquent. The robber was a juvenile delinquent because he was a juvenile delinquent. The robber was a juvenile delinquent because he was a juvenile delinquent. The robber was a juvenile delinquent because he was a juvenile delinquent. The robber was
+~~~
+
+## 7. Economics versus post-training (Phase 4)
+
+### Unit economics
+
+| Approach | Weights changed | Artifact / weight delta | One-off cost | Extra context tokens | Clean-token KL, held-out: all / no-negation prompts (nats) | Composite, 160 tokens | Composite, 512 tokens | tok/s |
+|---|---|---|---|---|---|---|---|---|
+| Raw base (`1_raw_base`) | 0 | – | none | 0 | 0 (reference) | **75.6** | 73.8 | 39.4 |
+| URIAL 3-shot prefix (`3_urial_3shot_prefix`) | 0 | 768-token prompt | none | 768 | 0.098 / 0.117 | **80.6** | – | 33.1 |
+| Static CAA (`4_static_caa`) | 0 | 2.3 MB (same artifact) | not recorded for this model | 0 | 0.108 / 0.104 | **75.6** | – | 40.1 |
+| **Engine v2.1** (`10_engine_v2_1`) | 0 | 2.3 MB | not recorded for this model | 0 | 0.230 / 0.024 | **86.2** | 87.5 | 37.3 |
+| **Engine v2.2 lean** (test-informed) (`11_engine_v2_2_lean`) | 0 | 2.3 MB | not recorded for this model | 0 | 0.226 / 0.023 | **86.2** | 86.9 | 39.0 |
+| Official Instruct, chat template (`12_official_instruct_chat`) | 86.7% of 1.54B | 3.09 GB (whole checkpoint) | SFT on > 1M examples + multi-stage RL; compute not disclosed | 25 | 0.232 / 0.213 | **84.4** | 90.0 | 39.6 |
+| Official Instruct, bare frame (`12_official_instruct_bare`) | 86.7% of 1.54B | 3.09 GB (whole checkpoint) | SFT on > 1M examples + multi-stage RL; compute not disclosed | 0 | 0.102 / 0.080 | **71.2** | 63.8 | 40.0 |
+| Instruct + sibling-orth ban, chat (`13_instruct_plus_orth_ban_chat`) | 86.7% of 1.54B | 3.09 GB (whole checkpoint) + 0 | SFT on > 1M examples + multi-stage RL; compute not disclosed | 25 | – | **85.0** | 91.9 | 38.4 |
+
+- **Weights changed / size.** The engine edits no weights; its artifact is the calibration file read by the hooks. The Instruct row compares every bf16 tensor of the two public checkpoints (`scripts/weight_delta.py`).
+- **Clean-token KL.** Mean D_KL(P_raw ‖ P_condition) in nats per token, teacher-forced at steps t > 4 on URIAL's clean answers to the test prompts (`eval/alignment_tax.py`; the calibration-answer version is in the detail table below). *no-negation* drops the 8 prompts with a parsed negation, where the lexical ban suppresses words the teacher answer uses by design. Lower means the condition leaves the base model's predictions on good assistant text more intact. It is a distance, not a quality score: Instruct is *meant* to move the distribution. The single-pass vs. step-by-step numerical floor of the raw base is 0.0007 nats.
+- **Composite, 512 tokens** reruns the same prompts with a 512-token budget (tag `test40_512tok`). Instruct writes longer answers, and the 160-token cap cuts many of them mid-sentence, which fails CleanStop.
+- **Stack.** Every row ran in bf16 on the steer_eager (HF-eager) attention, which Module 4 needs. The SDPA rows of the sensitivity table quantify what that costs the attention-agnostic conditions.
+- **tok/s** for conditions 2, 7, 10, x9 and 11 is the same-session benchmark; other rows are from their logs.
+- **One-off cost** for Instruct is the Qwen2.5 technical report's description of post-training (arXiv 2412.15115); the engine's is measured wall time on the M4 Pro (trajectory generation and state collection).
+
+### Post-trained reference conditions (all values in %)
+
+| Condition | TurnCross | Constraint | CleanStop | Fluency | **Composite** | NaturalEOS | Extra ctx tokens | ms/token | tok/s | avg new tokens |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `12_official_instruct_bare` | 100.0 | 62.5 | 37.5 | 85.0 | **71.2** | 25.0 | 0 | 25.0 | 40.0 | 127 |
+| `12_official_instruct_chat` | 100.0 | 62.5 | 75.0 | 100.0 | **84.4** | 65.0 | 25 | 25.3 | 39.6 | 96 |
+| `13_instruct_plus_orth_ban_bare` | 100.0 | 77.5 | 37.5 | 87.5 | **75.6** | 25.0 | 0 | 25.7 | 39.0 | 123 |
+| `13_instruct_plus_orth_ban_chat` | 100.0 | 70.0 | 72.5 | 97.5 | **85.0** | 62.5 | 25 | 26.0 | 38.4 | 101 |
+
+Stop reasons (eos / stop_string / max_tokens): `12_official_instruct_bare` 10/4/26; `12_official_instruct_chat` 26/0/14; `13_instruct_plus_orth_ban_bare` 10/4/26; `13_instruct_plus_orth_ban_chat` 25/0/15
+
+### Composite by category, engine vs. Instruct (%)
+
+| Condition | direct_qa | format_constraints | negative_constraints | reasoning_math | code_and_sql |
+|---|---|---|---|---|---|
+| `1_raw_base` | 65.6 | 87.5 | 75.0 | 56.2 | 93.8 |
+| `10_engine_v2_1` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
+| `11_engine_v2_2_lean` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
+| `12_official_instruct_bare` | 71.9 | 62.5 | 53.1 | 78.1 | 90.6 |
+| `12_official_instruct_chat` | 87.5 | 90.6 | 81.2 | 71.9 | 90.6 |
+| `13_instruct_plus_orth_ban_bare` | 71.9 | 62.5 | 75.0 | 78.1 | 90.6 |
+| `13_instruct_plus_orth_ban_chat` | 87.5 | 90.6 | 84.4 | 71.9 | 90.6 |
+
+### Sensitivity of the post-training comparison
+
+| Condition | Composite, protocol: eager attention, 160 tokens | Composite, SDPA attention, 160 tokens | Composite, eager attention, 512 tokens | hit token cap, eager attention, 160 tokens | hit token cap, SDPA attention, 160 tokens | hit token cap, eager attention, 512 tokens |
+|---|---|---|---|---|---|---|
+| `1_raw_base` | 75.6 | 81.2 | 73.8 | 9/40 | 10/40 | 7/40 |
+| `2_raw_base_plus_stops` | 80.6 | 83.8 | – | 4/40 | 7/40 | – |
+| `10_engine_v2_1` | 86.2 | – | 87.5 | 5/40 | – | 3/40 |
+| `11_engine_v2_2_lean` | 86.2 | – | 86.9 | 6/40 | – | 4/40 |
+| `12_official_instruct_chat` | 84.4 | 84.4 | 90.0 | 14/40 | 16/40 | 1/40 |
+| `12_official_instruct_bare` | 71.2 | 78.1 | 63.8 | 26/40 | 23/40 | 21/40 |
+| `13_instruct_plus_orth_ban_chat` | 85.0 | 86.9 | 91.9 | 15/40 | 16/40 | 1/40 |
+
+| Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |
+|---|---|---|---|---|---|
+| protocol: eager attention, 160 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +8.8 [+2.5, +15.0] | +1.9 [-6.9, +10.6] | **121%** [33%, 357%] |
+| protocol: eager attention, 160 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | -4.4 [-12.5, +4.4] | +15.0 [+5.6, +23.8] | undefined (Instruct ≤ raw base) |
+| protocol: eager attention, 160 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +8.8 [+2.5, +15.0] | +1.9 [-6.2, +10.0] | **121%** [38%, 360%] |
+| protocol: eager attention, 160 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -4.4 [-12.5, +4.4] | +15.0 [+5.6, +24.4] | undefined (Instruct ≤ raw base) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `10_engine_v2_1` | `12_official_instruct_chat` | +3.1 [-3.1, +9.4] | +1.9 [-6.2, +10.0] | not resolved (point 160%; denominator ≤ 0 in 20% of resamples) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `10_engine_v2_1` | `12_official_instruct_bare` | -3.1 [-10.0, +3.8] | +8.1 [+0.0, +16.2] | undefined (Instruct ≤ raw base) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +3.1 [-3.1, +9.4] | +1.9 [-6.2, +10.0] | not resolved (point 160%; denominator ≤ 0 in 20% of resamples) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -3.1 [-10.0, +3.8] | +8.1 [+0.0, +16.2] | undefined (Instruct ≤ raw base) |
+| eager attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +16.2 [+9.4, +23.1] | -2.5 [-10.0, +4.4] | **85%** [40%, 135%] |
+| eager attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | -10.0 [-20.0, +0.0] | +23.8 [+13.1, +34.4] | undefined (Instruct ≤ raw base) |
+| eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +16.2 [+9.4, +23.1] | -3.1 [-10.0, +3.1] | **81%** [40%, 125%] |
+| eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -10.0 [-20.0, +0.0] | +23.1 [+11.9, +34.4] | undefined (Instruct ≤ raw base) |
+
+### Clean-token KL distortion in detail
+
+Mean KL is pooled over tokens; *median answer* is the median of per-answer means; *no negation* pools only answers to prompts without a parsed negation (on the others the engine's lexical ban suppresses words the teacher answer uses, by design).
+
+| Condition | KL, calib | KL, held-out | median answer, calib / held-out | no negation, calib / held-out | KL t ≤ 4, calib | top-1 agreement, calib / held-out |
+|---|---|---|---|---|---|---|
+| `raw_base_single_pass` | 0.0007 | 0.0009 | 0.0007 / 0.0008 | 0.0007 / 0.0008 | 0.001 | 99.4% / 99.0% |
+| `3_urial_3shot_prefix` | 0.1171 | 0.0979 | 0.0704 / 0.0792 | 0.1192 / 0.1168 | 0.424 | 91.6% / 91.1% |
+| `4_static_caa` | 0.0966 | 0.1079 | 0.0959 / 0.1045 | 0.0973 / 0.1041 | 0.180 | 90.4% / 87.8% |
+| `10_engine_v2_1` | 0.1226 | 0.2303 | 0.0105 / 0.0123 | 0.0284 / 0.0235 | 0.321 | 96.8% / 95.9% |
+| `11_engine_v2_2_lean` | 0.1073 | 0.2259 | 0.0096 / 0.0111 | 0.0200 / 0.0233 | 0.195 | 96.9% / 95.9% |
+| `12_official_instruct_bare` | 0.0850 | 0.1019 | 0.0768 / 0.0865 | 0.0863 / 0.0800 | 0.345 | 92.2% / 89.5% |
+| `12_official_instruct_chat` | 0.1688 | 0.2319 | 0.1591 / 0.2511 | 0.1711 / 0.2130 | 3.012 | 90.5% / 87.2% |
+
+64 calibration answers (6745 tokens at t > 4) and 24 held-out answers (2040 tokens).
+
+## 8. Engine vs. post-trained Instruct (verbatim)
+
+Selected by rule: the 8 prompts where the sibling-orthogonal ban changed the Instruct (chat) answer, then the first 6 prompts (by id) whose Composite differs between `10_engine_v2_1` and `12_official_instruct_chat`. Outputs are shown after stop-string truncation.
+
+### `t_ng_01` (negative_constraints)
+
+**Prompt:** Explain gravity in one paragraph without using the word 'force'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 44 tokens
+
+~~~text
+Gravity is a mysterious and powerful attraction that pulls objects towards each other, like when you drop a ball and it falls to the ground. It's like a invisible glue that holds everything together and makes the world go round.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 44 tokens
+
+~~~text
+Gravity is a mysterious and powerful attraction that pulls objects towards each other, like when you drop a ball and it falls to the ground. It's like a invisible glue that holds everything together and makes the world go round.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 70 tokens
+
+~~~text
+Gravity is a fundamental force of nature that attracts all objects with mass towards each other. It is responsible for the round shape of planets and stars, the formation of galaxies, and the motion of celestial bodies. Essentially, gravity is the invisible pull that keeps us grounded on Earth, the moon orbiting around it, and the planets moving in their orbits.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 100 tokens
+
+~~~text
+Gravity is a fundamental interaction in the universe that attracts all objects with mass towards each other. It is a consequence of the distribution of mass in the universe and is responsible for the formation of planets, stars, and galaxies. The strength of gravity decreases with the square of the distance between two masses, meaning that objects that are farther apart experience less gravitational pull than those that are closer together. This universal law governs the motion of celestial bodies and plays a crucial role in shaping the structure of the cosmos.
+~~~
+
+### `t_ng_02` (negative_constraints)
+
+**Prompt:** List 3 programming languages without mentioning Python.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✘ · stop=`eos` · 1 tokens
+
+~~~text
+Java
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 7 tokens
+
+~~~text
+Java, C++, and C#.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 12 tokens
+
+~~~text
+1. C++
+2. Java
+3. C#
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✘ · Stop=✘ · Fluency=✘ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Sure, here are three programming languages that are not related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the question of not being related to the
+~~~
+
+### `t_ng_03` (negative_constraints)
+
+**Prompt:** Describe the ocean without using the word 'water'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 61 tokens
+
+~~~text
+The ocean is a vast and intricate system of interconnected bodies of salt-and-sugar-rich liquid that covers over two-thirds of the Earth's surface. It is a complex and dynamic environment that is home to a diverse range of marine life and plays a crucial role in regulating the Earth's climate and weather patterns.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 45 tokens
+
+~~~text
+The ocean is a vast expanse of salt and liquid that covers most of the Earth's surface. It is a complex ecosystem that supports a wide variety of marine life and plays a crucial role in regulating the Earth's climate.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 81 tokens
+
+~~~text
+The ocean is a vast, deep, and mysterious body of water that covers about 71% of the Earth's surface. It is a complex ecosystem that supports a wide variety of marine life, including fish, whales, dolphins, and many other species. The ocean is also a crucial part of the Earth's climate system, as it absorbs and releases heat and carbon dioxide, and influences weather patterns.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 80 tokens
+
+~~~text
+The ocean is a vast and complex system of interconnected bodies of salt-and-sugar-rich liquid that covers approximately 71% of the Earth's surface and contains approximately 97% of the Earth's surface's total liquid volume. It is a dynamic and constantly changing environment that is home to a diverse array of marine life and plays a crucial role in regulating the Earth's climate and weather patterns.
+~~~
+
+### `t_ng_04` (negative_constraints)
+
+**Prompt:** Explain how to ride a bicycle without using the word 'balance'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 145 tokens
+
+~~~text
+To ride a bicycle with the word 'balanced' removed, you can follow these steps:
+
+1. Start by pedaling forward with one foot while keeping the other foot on the ground.
+2. As you pedal, shift your weight forward onto the pedal with the foot that is on the ground.
+3. Keep your body weight centered over the bike and your hands on the handlebars.
+4. As you pedal, keep your elbows close to your sides and your shoulders back.
+5. Use your legs to push the bike forward and your arms to steer it.
+6. Practice riding in different directions and at different speeds to improve your skills.
+
+By following these steps, you can ride a bicycle without using the word 'balanced'.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✘ · Stop=✘ · Fluency=✘ · stop=`max_tokens` · 160 tokens
+
+~~~text
+To ride a bicycle without using the word 'balanced', you can use the following steps:
+
+1. Start by pedaling forward with your right foot.
+2. As you pedal, your left foot should be on the ground, ready to push off when you need to change direction.
+3. As you pedal, your right foot should be on the ground, ready to push off when you need to change direction.
+4. As you pedal, your left foot should be on the ground, ready to push off when you need to change direction.
+5. As you pedal, your right foot should be on the ground, ready to push off when you need to change direction.
+6. As you pedal, your left foot should be on the ground, ready to push off when you need to change direction.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+To ride a bicycle without using the word 'balance', you can follow these steps:
+
+1. Start by sitting on the bicycle seat and placing your feet on the pedals.
+2. Shift your weight slightly forward, so your body is balanced over the bicycle.
+3. Begin pedaling by pushing the pedals forward with your feet.
+4. As you pedal, keep your body in a straight line, with your weight slightly forward.
+5. As you pedal, keep your arms relaxed and your hands on the handlebars.
+6. As you pedal, keep your eyes focused on the ground in front of you.
+7. As you pedal, keep your body in a straight line, with your weight slightly forward.
+8. As you pedal, keep your arms relaxed and your hands on the handlebars.
+9
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✘ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+To ride a bicycle without using the word 'balanced', you can follow these steps:
+
+1. Start by sitting on the bicycle seat and placing your feet on the pedals.
+2. Shift your weight slightly forward onto the pedals.
+3. Begin pedaling by pushing the pedals forward with your feet.
+4. As you pedal, keep your body weight centered over the bicycle frame.
+5. Keep your hands on the handlebars and steer the bicycle in the direction you want to go.
+6. As you pedal, keep your eyes on the road ahead and look for obstacles or hazards.
+7. Practice riding in different conditions, such as on a flat surface or on a hill.
+8. As you become more comfortable with riding without using the word 'balanced', you can start to focus more on the feel
+~~~
+
+### `t_ng_05` (negative_constraints)
+
+**Prompt:** Write a short description of a forest without using the words 'tree' or 'trees'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 82 tokens
+
+~~~text
+The forest was a vast expanse of greenery, where the sun's rays danced through the canopy of leaves, casting dappled shadows on the forest floor. The air was filled with the sweet scent of blooming flowers and the rustling of leaves in the gentle breeze. The forest was a place of tranquility and beauty, where the earth and the sky seemed to merge into one harmonious whole.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 82 tokens
+
+~~~text
+The forest was a vast expanse of greenery, where the sun's rays danced through the canopy of leaves, casting dappled shadows on the forest floor. The air was filled with the sweet scent of blooming flowers and the rustling of leaves in the gentle breeze. The forest was a place of tranquility and beauty, where the earth and the sky seemed to merge into one harmonious whole.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 81 tokens
+
+~~~text
+The forest is a vast, verdant expanse where sunlight filters through the dense canopy, casting dappled shadows on the forest floor. The air is thick with the scent of earth and leaves, and the sound of rustling leaves and chirping birds fills the air. The forest is a home to a myriad of creatures, from the smallest insects to the largest mammals, all coexisting in harmony.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 91 tokens
+
+~~~text
+The forest is a vast expanse of green, where sunlight filters through the canopy of towering plants, creating a kaleidoscope of colors and shadows. The air is thick with the scent of earth and leaves, carrying the whispers of unseen creatures and the rustle of unseen winds. The forest is a sanctuary for countless species, from the smallest insects to the largest mammals, each contributing to the intricate web of life that thrives in this verdant haven.
+~~~
+
+### `t_ng_06` (negative_constraints)
+
+**Prompt:** Explain what the internet is without using the word 'computer'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 80 tokens
+
+~~~text
+The internet is a global network of interconnected devices and systems that allow people to communicate and share information with each other around the world. It is made up of millions of interconnected networks that use a common set of rules and protocols to communicate with each other. The internet is made up of a vast collection of websites and online services that people can use to access information, communicate with others, and conduct business.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 80 tokens
+
+~~~text
+The internet is a global network of interconnected devices and systems that allow people to communicate and share information with each other around the world. It is made up of millions of interconnected networks that use a common set of rules and protocols to communicate with each other. The internet is made up of a vast collection of websites and online services that people can use to access information, communicate with others, and conduct business.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 101 tokens
+
+~~~text
+The internet is a global network of interconnected computers and networks that allow people to communicate, share information, and access resources from around the world. It is made up of a vast network of servers, routers, and other hardware and software components that work together to facilitate the exchange of data and information. The internet is a vast and complex system that is constantly evolving and growing, and it plays a crucial role in our daily lives by connecting people and enabling them to access information and services from anywhere in the world.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 75 tokens
+
+~~~text
+The internet is a global network of interconnected devices and systems that allow people to communicate and share information with each other over long distances. It consists of a vast network of servers and networks that enable the exchange of data and information between different locations around the world. The internet is made up of a variety of different technologies and protocols that work together to facilitate communication and sharing of information.
+~~~
+
+### `t_ng_07` (negative_constraints)
+
+**Prompt:** Name three animals that live in Africa without mentioning lions or elephants.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 25 tokens
+
+~~~text
+Giraffes, zebras, and rhinos are animals that live in Africa without mentioning the presence of the mentioned animals.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 25 tokens
+
+~~~text
+Giraffes, zebras, and rhinos are animals that live in Africa without mentioning the presence of the mentioned animals.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 46 tokens
+
+~~~text
+Sure, here are three animals that live in Africa but do not include lions or elephants:
+
+1. Giraffes
+2. Zebras
+3. Rhinoceroses (specifically the black rhinoceros)
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 46 tokens
+
+~~~text
+Sure, here are three animals that live in Africa but do not include the mentioned species:
+
+1. Giraffes
+2. Zebras
+3. Rhinoceroses (specifically the black rhinoceros)
+~~~
+
+### `t_ng_08` (negative_constraints)
+
+**Prompt:** Explain why people need sleep without using the word 'rest'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 95 tokens
+
+~~~text
+People need sleep because it is essential for the body to recover and repair itself from the wear and tear of daily activities. Sleep is a time when the body can regenerate cells, repair tissues, and consolidate memories. Without adequate sleep, the body cannot function properly, and the immune system may become weakened, leading to increased susceptibility to illness and disease. Additionally, sleep plays a crucial role in maintaining mental health and cognitive function, as it helps to regulate mood and reduce stress levels.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 95 tokens
+
+~~~text
+People need sleep because it is essential for the body to recover and repair itself from the wear and tear of daily activities. Sleep is a time when the body can regenerate cells, repair tissues, and consolidate memories. Without adequate sleep, the body cannot function properly, and the immune system may become weakened, leading to increased susceptibility to illness and disease. Additionally, sleep plays a crucial role in maintaining mental health and cognitive function, as it helps to regulate mood and reduce stress levels.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 81 tokens
+
+~~~text
+People need sleep because it is essential for the body and brain to function properly. During sleep, the body repairs and rejuvenates itself, and the brain consolidates memories and processes information. Sleep also helps regulate mood, appetite, and other bodily functions. Without adequate sleep, people may experience fatigue, difficulty concentrating, and impaired decision-making, which all of which can affect their daily life and overall well-being.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 91 tokens
+
+~~~text
+People need sleep because it is essential for the body and brain to function properly. During sleep, the body repairs and rebuilds tissues, including muscles and bones. It also helps to consolidate memories and processes information learned during the day. Additionally, sleep plays a crucial role in regulating hormones and maintaining a healthy immune system. Without adequate sleep, the body and brain may not function as well, leading to a range of negative effects on overall health and well-being.
+~~~
+
+### `t_cd_01` (code_and_sql)
+
+**Prompt:** Write a SQL query to find the top 3 departments by average salary from a table employees(department, salary). Return only the SQL code block.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 96 tokens
+
+~~~text
+Here is the SQL query to find the top 3 departments by average salary from a table employees(department, salary):
+
+```sql
+SELECT department, AVG(salary) AS average_salary
+FROM employees
+GROUP BY department
+ORDER BY average_salary DESC
+LIMIT 3;
+```
+
+This query groups the employees by department, calculates the average salary for each department, orders the results in descending order based on the average salary, and limits the result to the top 3 departments.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 96 tokens
+
+~~~text
+Here is the SQL query to find the top 3 departments by average salary from a table employees(department, salary):
+
+```sql
+SELECT department, AVG(salary) AS average_salary
+FROM employees
+GROUP BY department
+ORDER BY average_salary DESC
+LIMIT 3;
+```
+
+This query groups the employees by department, calculates the average salary for each department, orders the results in descending order based on the average salary, and limits the output to the top 3 departments.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 32 tokens
+
+~~~text
+```sql
+SELECT department, AVG(salary) AS average_salary
+FROM employees
+GROUP BY department
+ORDER BY average_salary DESC
+LIMIT 3;
+```
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 32 tokens
+
+~~~text
+```sql
+SELECT department, AVG(salary) AS average_salary
+FROM employees
+GROUP BY department
+ORDER BY average_salary DESC
+LIMIT 3;
+```
+~~~
+
+### `t_cd_03` (code_and_sql)
+
+**Prompt:** Write a SQL query that returns the number of users who signed up in 2023 from a table users(id, signup_date).
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`stop_string` · 36 tokens
+
+~~~text
+SELECT COUNT(*) FROM users WHERE signup_date BETWEEN '2023-01-01' AND '2023-12-31';
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`stop_string` · 36 tokens
+
+~~~text
+SELECT COUNT(*) FROM users WHERE signup_date BETWEEN '2023-01-01' AND '2023-12-31';
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+To write a SQL query that returns the number of users who signed up in 2023 from a table `users` (with columns `id` and `signup_date`), you can use the following SQL query:
+
+```sql
+SELECT COUNT(*) AS num_users
+FROM users
+WHERE YEAR(signup_date) = 2023;
+```
+
+### Explanation:
+- `COUNT(*)` is used to count the number of rows in the result set.
+- `AS num_users` is used to alias the result of the `COUNT(*)` function as `num_users`.
+- `FROM users` specifies the table from which to retrieve the data.
+- `WHERE YEAR(signup_date) = 2023` filters the rows to only include those where the `signup
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+To write a SQL query that returns the number of users who signed up in 2023 from a table `users` (with columns `id` and `signup_date`), you can use the following SQL query:
+
+```sql
+SELECT COUNT(*) AS num_users
+FROM users
+WHERE YEAR(signup_date) = 2023;
+```
+
+### Explanation:
+- `COUNT(*)` is used to count the number of rows in the result set.
+- `AS num_users` is used to alias the result of the `COUNT(*)` function as `num_users`.
+- `FROM users` specifies the table from which to retrieve the data.
+- `WHERE YEAR(signup_date) = 2023` filters the rows to only include those where the `signup
+~~~
+
+### `t_cd_05` (code_and_sql)
+
+**Prompt:** Write a JavaScript function called sumArray that returns the sum of an array of numbers.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 148 tokens
+
+~~~text
+Here's a JavaScript function that returns the sum of an array of numbers:
+
+```javascript
+function sumArray(arr) {
+  let sum = 0;
+  for (let i = 0; i < arr.length; i++) {
+    sum += arr[i];
+  }
+  return sum;
+}
+```
+
+You can use this function like this:
+
+```javascript
+let arr = [1, 2, 3, 4, 5];
+let result = sumArray(arr);
+console.log(result); // Output: 15
+```
+
+This function uses a for loop to iterate over each element in the array and adds it to the sum variable. Finally, it returns the sum of all the elements in the array.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 148 tokens
+
+~~~text
+Here's a JavaScript function that returns the sum of an array of numbers:
+
+```javascript
+function sumArray(arr) {
+  let sum = 0;
+  for (let i = 0; i < arr.length; i++) {
+    sum += arr[i];
+  }
+  return sum;
+}
+```
+
+You can use this function like this:
+
+```javascript
+let arr = [1, 2, 3, 4, 5];
+let result = sumArray(arr);
+console.log(result); // Output: 15
+```
+
+This function uses a for loop to iterate over each element in the array and adds it to the sum variable. Finally, it returns the sum of all the elements in the array.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! Below is a JavaScript function named `sumArray` that takes an array of numbers as an argument and returns the sum of those numbers:
+
+```javascript
+function sumArray(arr) {
+    return arr.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
+}
+
+// Example usage:
+const numbers = [1, 2, 3, 4, 5];
+const total = sumArray(numbers);
+console.log(total); // Output: 15
+```
+
+### Explanation:
+- **`arr.reduce`**: This method is used to reduce an array to a single value. It takes two arguments: a callback function and an initial value.
+  - The callback function takes two arguments: `accumulator` and `currentValue`.
+  - The `accumulator` is the accumulated
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! Below is a JavaScript function named `sumArray` that takes an array of numbers as an argument and returns the sum of those numbers:
+
+```javascript
+function sumArray(arr) {
+    return arr.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
+}
+
+// Example usage:
+const numbers = [1, 2, 3, 4, 5];
+const total = sumArray(numbers);
+console.log(total); // Output: 15
+```
+
+### Explanation:
+- **`arr.reduce`**: This method is used to reduce an array to a single value. It takes two arguments: a callback function and an initial value.
+  - The callback function takes two arguments: `accumulator` and `currentValue`.
+  - The `accumulator` is the accumulated
+~~~
+
+### `t_cd_08` (code_and_sql)
+
+**Prompt:** Write a Python function called celsius_to_fahrenheit(c) that converts a temperature from Celsius to Fahrenheit. Return only the code block.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 79 tokens
+
+~~~text
+Here's the Python function:
+
+```python
+def celsius_to_fahrenheit(c):
+    f = (c * 9/5) + 32
+    return f
+```
+
+This function takes a temperature in Celsius as input and returns the equivalent temperature in Fahrenheit. The formula used to convert Celsius to Fahrenheit is `(Celsius * 9/5) + 32`.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 79 tokens
+
+~~~text
+Here's the Python function:
+
+```python
+def celsius_to_fahrenheit(c):
+    f = (c * 9/5) + 32
+    return f
+```
+
+This function takes a temperature in Celsius as input and returns the equivalent temperature in Fahrenheit. The formula used to convert Celsius to Fahrenheit is `(Celsius * 9/5) + 32`.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 34 tokens
+
+~~~text
+```python
+def celsius_to_fahrenheit(c):
+    fahrenheit = (c * 9/5) + 32
+    return fahrenheit
+```
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 34 tokens
+
+~~~text
+```python
+def celsius_to_fahrenheit(c):
+    fahrenheit = (c * 9/5) + 32
+    return fahrenheit
+```
+~~~
+
+### `t_fm_01` (format_constraints)
+
+**Prompt:** Explain quantum computing in exactly 3 bullet points, each starting with "- ".
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 74 tokens
+
+~~~text
+Quantum computing is a type of computing that uses quantum-mechanical phenomena, such as superposition and entanglement, to perform operations on data. It is a new paradigm of computing that is different from classical computing. Quantum computers use quantum bits, or qubits, which which can exist in multiple states simultaneously, allowing for much faster processing of certain types of problems.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 74 tokens
+
+~~~text
+Quantum computing is a type of computing that uses quantum-mechanical phenomena, such as superposition and entanglement, to perform operations on data. It is a new paradigm of computing that is different from classical computing. Quantum computers use quantum bits, or qubits, which which can exist in multiple states simultaneously, allowing for much faster processing of certain types of problems.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 47 tokens
+
+~~~text
+- Quantum computing harnesses the principles of quantum mechanics to process information.
+- It utilizes quantum bits, or qubits, which can exist in multiple states simultaneously.
+- Quantum computers perform complex calculations and simulations at speeds far exceeding classical computers.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 47 tokens
+
+~~~text
+- Quantum computing harnesses the principles of quantum mechanics to process information.
+- It utilizes quantum bits, or qubits, which can exist in multiple states simultaneously.
+- Quantum computers perform complex calculations and simulations at speeds far exceeding classical computers.
+~~~
+
+### `t_fm_04` (format_constraints)
+
+**Prompt:** List five countries in Europe as a numbered list from 1 to 5.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 25 tokens
+
+~~~text
+1. France, 2. Germany, 3. Italy, 4. Spain, 5. United Kingdom
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 25 tokens
+
+~~~text
+1. France, 2. Germany, 3. Italy, 4. Spain, 5. United Kingdom
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 20 tokens
+
+~~~text
+1. United Kingdom
+2. France
+3. Germany
+4. Italy
+5. Spain
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 20 tokens
+
+~~~text
+1. United Kingdom
+2. France
+3. Germany
+4. Italy
+5. Spain
 ~~~

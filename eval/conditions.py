@@ -9,14 +9,15 @@ from pathlib import Path
 import torch
 from tqdm import tqdm
 
-from engine import AssistantEngine, EngineConfig, SteeringArtifact, encode_prompt, generate
+from engine import AssistantEngine, EngineConfig, SteeringArtifact, encode_chat_prompt, encode_prompt, generate
 from engine.prompts import EVAL_STOP_STRINGS
 
 from .verifiers import score_response
 
 _OFF = dict(lifecycle=False, dynamic_stop=False, erase=False, predictor=False, pin_attention=False, static_caa=False)
 
-# name -> (use URIAL prefix, use stop strings, module toggles or None for "no engine")
+# name -> (prompt frame, use stop strings, module toggles or None for "no engine"); the frame is False for the bare
+# "Question: ...\nAnswer:" frame, True for the URIAL prefix + bare frame, "chat" for the checkpoint's chat template
 CONDITIONS: dict[str, tuple[bool, bool, dict | None]] = {
     "1_raw_base": (False, False, None),
     "2_raw_base_plus_stops": (False, True, None),
@@ -54,7 +55,31 @@ V21_ABLATIONS: dict[str, tuple[bool, bool, dict | None]] = {
     "x8_v2_1_minus_sibling_orth": (False, True, {**_V21, "sibling_orth": False}),
     "x9_v2_1_minus_anti_echo": (False, True, {**_V21, "anti_echo": False}),
 }
-ALL_CONDITIONS = {**CONDITIONS, **EXTRA_CONDITIONS, **V2_CONDITIONS, **V21_ABLATIONS}
+# v2.2 lean: only the two mechanisms the leave-one-outs credit (boundary-coupled hinge, sibling-orthogonal projection),
+# a token-text-only boundary trigger and the sync-free projection. No new coefficients; the mechanism set was chosen
+# from the *test* leave-one-outs, so its test score is not a held-out estimate.
+V22_CONDITIONS: dict[str, tuple[bool, bool, dict | None]] = {
+    "11_engine_v2_2_lean": (False, True, {**_V21, "drift_stop": False, "anti_echo": False, "boundary_trigger": "text",
+                                          "sibling_fast": True}),
+}
+ALL_CONDITIONS = {**CONDITIONS, **EXTRA_CONDITIONS, **V2_CONDITIONS, **V21_ABLATIONS, **V22_CONDITIONS}
+
+# Post-trained reference checkpoints (Qwen/Qwen2.5-*-Instruct), logged under results/<instruct slug>/<tag>/. Condition 13
+# attaches only the lexical operator of condition 11 (no calibration artifact; frozen base-dev coefficients).
+INSTRUCT_SUFFIX = "-Instruct"
+_ORTH_BAN = {**_OFF, "unembed_project": True, "unembed_center": True, "sibling_orth": True, "sibling_fast": True}
+INSTRUCT_CONDITIONS: dict[str, tuple[bool | str, bool, dict | None]] = {
+    "12_official_instruct_bare": (False, True, None),
+    "12_official_instruct_chat": ("chat", True, None),
+    "13_instruct_plus_orth_ban_bare": (False, True, _ORTH_BAN),
+    "13_instruct_plus_orth_ban_chat": ("chat", True, _ORTH_BAN),
+}
+
+
+def encode_for(tokenizer, instruction: str, frame: bool | str):
+    if frame == "chat":
+        return encode_chat_prompt(tokenizer, instruction)
+    return encode_prompt(tokenizer, instruction, urial=bool(frame))
 
 
 def load_hparams(path: Path | None) -> dict:
@@ -83,16 +108,16 @@ _PARAMS_OF = {
     "lifecycle": ["alpha_init", "gamma", "init_steps", "alpha_sustain"],
     "dynamic_stop": ["alpha_stop", "stop_min_step", "stop_logit_boost", "newturn_logprob"],
     "erase": ["lambda_erase", "erase_kappa", "erase_mode", "lambda_hinge", "hinge_kappa_floor", "boundary_hinge",
-              "kappa_boundary", "boundary_after_newline", "boundary_score_margin"],
+              "kappa_boundary", "boundary_after_newline", "boundary_score_margin", "boundary_trigger"],
     "predictor": ["predictor_weight", "predictor_clip"],
     "pin_attention": ["beta_attn", "signed_attention", "beta_neg_attn", "neg_span_mode"],
     "signed_attention": ["beta_neg_attn", "neg_span_mode"],
     "static_caa": ["alpha_caa"],
     "unembed_project": ["gamma_unembed", "unembed_center", "sibling_orth", "sibling_k", "sibling_min_overlap",
-                        "anti_echo", "anti_echo_window"],
-    "boundary_hinge": ["kappa_boundary", "boundary_after_newline", "boundary_score_margin"],
+                        "anti_echo", "anti_echo_window", "sibling_fast", "ban_morphology"],
+    "boundary_hinge": ["kappa_boundary", "boundary_after_newline", "boundary_score_margin", "boundary_trigger"],
     "drift_stop": ["tau_drift_stop", "drift_stop_score_margin"],
-    "sibling_orth": ["sibling_k", "sibling_min_overlap"],
+    "sibling_orth": ["sibling_k", "sibling_min_overlap", "sibling_fast"],
     "anti_echo": ["anti_echo_window"],
 }
 
@@ -105,7 +130,7 @@ def relevant_config(cfg: dict) -> dict:
             drop |= set(params)
     if cfg.get("erase_mode", "v1") == "v1":
         drop |= {"lambda_hinge", "hinge_kappa_floor", "boundary_hinge", "kappa_boundary", "boundary_after_newline",
-                 "boundary_score_margin"}
+                 "boundary_score_margin", "boundary_trigger"}
     else:
         drop |= {"lambda_erase", "erase_kappa"}
     return {k: v for k, v in cfg.items() if k not in drop}
@@ -132,7 +157,7 @@ def load_prompts(path: Path, n: int | None = None, per_category: bool = True) ->
 def run_condition(lm, art: SteeringArtifact | None, name: str, prompts: list[dict], hparams: dict,
                   max_new_tokens: int = 160, out_file: Path | None = None, desc: str | None = None,
                   conditions: dict | None = None) -> list[dict]:
-    urial, stops, toggles = (conditions or ALL_CONDITIONS)[name]
+    frame, stops, toggles = (conditions or ALL_CONDITIONS)[name]
     cfg = engine_config(toggles, hparams) if toggles is not None else None
     done: dict[str, dict] = {}
     if out_file is not None and out_file.exists():
@@ -155,10 +180,10 @@ def run_condition(lm, art: SteeringArtifact | None, name: str, prompts: list[dic
                 records.append(rec)
                 continue
             torch.manual_seed(0)
-            enc = encode_prompt(lm.tokenizer, p["instruction"], urial=urial)
-            res = generate(lm, enc, max_new_tokens, EVAL_STOP_STRINGS if stops else None, engine)
+            enc = encode_for(lm.tokenizer, p["instruction"], frame)
+            res = generate(lm, enc, max_new_tokens, EVAL_STOP_STRINGS if stops else None, engine, lm.eos_ids or None)
             rec = {
-                "condition": name, "prompt_id": p["id"], "category": p["category"], "instruction": p["instruction"],
+                "condition": name, "model": lm.name, "attn": lm.attn, "prompt_id": p["id"], "category": p["category"], "instruction": p["instruction"],
                 "response": res.text, **{k: v for k, v in res.to_dict().items() if k != "text"},
                 "extra_prompt_tokens": enc.extra_tokens,
                 "metrics": score_response(res.text, res.stop_reason, p),

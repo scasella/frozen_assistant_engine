@@ -1,0 +1,466 @@
+{
+  "run": {
+    "model": "Qwen/Qwen2.5-3B-Instruct",
+    "tag": "test40",
+    "n_prompts": 40,
+    "prompts_file": "test_prompts.json",
+    "max_new_tokens": 160,
+    "hparams_file": "configs/hparams.json",
+    "hparams": {
+      "alpha_init": 1.0,
+      "alpha_sustain": 0.35,
+      "lambda_erase": 0.35,
+      "erase_kappa": 1.0,
+      "predictor_weight": 1.0,
+      "stop_logit_boost": 5.0,
+      "alpha_stop": 1.0,
+      "beta_attn": 0.5,
+      "alpha_caa": 2.0,
+      "hinge_kappa_floor": 2.6,
+      "lambda_hinge": 0.75,
+      "neg_span_mode": "clause",
+      "beta_neg_attn": 0.5,
+      "unembed_center": false,
+      "gamma_unembed": 1.5,
+      "v2_base": "7_engine_v2_hinge_erase",
+      "kappa_boundary": 1.5,
+      "tau_drift_stop": 1.8,
+      "sibling_k": 4,
+      "anti_echo_window": 12
+    },
+    "hparams_meta": {
+      "provenance": "coordinate search on 15 dev prompts (data/dev_prompts.json, disjoint from the test set) with Qwen/Qwen2.5-1.5B; frozen afterwards",
+      "tuned_on_model": "Qwen/Qwen2.5-1.5B",
+      "artifact": "artifacts/Qwen__Qwen2.5-1.5B/calib80/calibration.pt",
+      "spec_defaults": {
+        "alpha_init": 1.0,
+        "alpha_sustain": 0.35,
+        "lambda_erase": 0.7,
+        "erase_kappa": 1.0,
+        "predictor_weight": 1.0,
+        "stop_logit_boost": 5.0,
+        "alpha_stop": 1.0,
+        "beta_attn": 1.25,
+        "alpha_caa": 1.0
+      },
+      "history": [
+        {
+          "condition": "5_lifecycle_plus_nullspace",
+          "start": {
+            "alpha_init": 1.0,
+            "alpha_sustain": 0.35,
+            "lambda_erase": 0.7,
+            "erase_kappa": 1.0,
+            "predictor_weight": 1.0,
+            "stop_logit_boost": 5.0,
+            "alpha_stop": 1.0,
+            "beta_attn": 1.25,
+            "alpha_caa": 1.0
+          },
+          "composite": 88.33333333333333
+        },
+        {
+          "condition": "5_lifecycle_plus_nullspace",
+          "end": {
+            "alpha_init": 1.0,
+            "alpha_sustain": 0.35,
+            "lambda_erase": 0.35,
+            "erase_kappa": 1.0,
+            "predictor_weight": 1.0,
+            "stop_logit_boost": 5.0,
+            "alpha_stop": 1.0,
+            "beta_attn": 1.25,
+            "alpha_caa": 1.0
+          },
+          "composite": 91.66666666666667
+        },
+        {
+          "condition": "6_full_assistant_engine",
+          "start": {
+            "alpha_init": 1.0,
+            "alpha_sustain": 0.35,
+            "lambda_erase": 0.35,
+            "erase_kappa": 1.0,
+            "predictor_weight": 1.0,
+            "stop_logit_boost": 5.0,
+            "alpha_stop": 1.0,
+            "beta_attn": 1.25,
+            "alpha_caa": 1.0
+          },
+          "composite": 88.33333333333333
+        },
+        {
+          "condition": "6_full_assistant_engine",
+          "end": {
+            "alpha_init": 1.0,
+            "alpha_sustain": 0.35,
+            "lambda_erase": 0.35,
+            "erase_kappa": 1.0,
+            "predictor_weight": 1.0,
+            "stop_logit_boost": 5.0,
+            "alpha_stop": 1.0,
+            "beta_attn": 0.5,
+            "alpha_caa": 1.0
+          },
+          "composite": 91.66666666666667
+        },
+        {
+          "condition": "4_static_caa",
+          "start": {
+            "alpha_init": 1.0,
+            "alpha_sustain": 0.35,
+            "lambda_erase": 0.35,
+            "erase_kappa": 1.0,
+            "predictor_weight": 1.0,
+            "stop_logit_boost": 5.0,
+            "alpha_stop": 1.0,
+            "beta_attn": 0.5,
+            "alpha_caa": 1.0
+          },
+          "composite": 80.0
+        },
+        {
+          "condition": "4_static_caa",
+          "end": {
+            "alpha_init": 1.0,
+            "alpha_sustain": 0.35,
+            "lambda_erase": 0.35,
+            "erase_kappa": 1.0,
+            "predictor_weight": 1.0,
+            "stop_logit_boost": 5.0,
+            "alpha_stop": 1.0,
+            "beta_attn": 0.5,
+            "alpha_caa": 2.0
+          },
+          "composite": 81.66666666666667
+        }
+      ],
+      "min_gain": 0.5,
+      "phase2": {
+        "provenance": "coordinate search on 15 dev prompts with Qwen/Qwen2.5-1.5B; started from the Phase-2 spec values {'hinge_kappa_floor': 2.2, 'lambda_hinge': 0.75, 'neg_span_mode': 'clause', 'beta_neg_attn': 1.0, 'unembed_center': False, 'gamma_unembed': 2.0}; a change was adopted only if dev Composite improved by > 0.5",
+        "artifact": "artifacts/Qwen__Qwen2.5-1.5B/calib80/calibration.pt",
+        "history": [
+          {
+            "condition": "7_engine_v2_hinge_erase",
+            "start": {
+              "alpha_init": 1.0,
+              "alpha_sustain": 0.35,
+              "lambda_erase": 0.35,
+              "erase_kappa": 1.0,
+              "predictor_weight": 1.0,
+              "stop_logit_boost": 5.0,
+              "alpha_stop": 1.0,
+              "beta_attn": 0.5,
+              "alpha_caa": 2.0,
+              "hinge_kappa_floor": 2.2,
+              "lambda_hinge": 0.75,
+              "neg_span_mode": "clause",
+              "beta_neg_attn": 1.0,
+              "unembed_center": false,
+              "gamma_unembed": 2.0
+            },
+            "composite": 90.0
+          },
+          {
+            "condition": "7_engine_v2_hinge_erase",
+            "end": {
+              "alpha_init": 1.0,
+              "alpha_sustain": 0.35,
+              "lambda_erase": 0.35,
+              "erase_kappa": 1.0,
+              "predictor_weight": 1.0,
+              "stop_logit_boost": 5.0,
+              "alpha_stop": 1.0,
+              "beta_attn": 0.5,
+              "alpha_caa": 2.0,
+              "hinge_kappa_floor": 2.6,
+              "lambda_hinge": 0.75,
+              "neg_span_mode": "clause",
+              "beta_neg_attn": 1.0,
+              "unembed_center": false,
+              "gamma_unembed": 2.0
+            },
+            "composite": 91.66666666666667
+          },
+          {
+            "condition": "8_engine_v2_signed_attn",
+            "start": {
+              "alpha_init": 1.0,
+              "alpha_sustain": 0.35,
+              "lambda_erase": 0.35,
+              "erase_kappa": 1.0,
+              "predictor_weight": 1.0,
+              "stop_logit_boost": 5.0,
+              "alpha_stop": 1.0,
+              "beta_attn": 0.5,
+              "alpha_caa": 2.0,
+              "hinge_kappa_floor": 2.6,
+              "lambda_hinge": 0.75,
+              "neg_span_mode": "clause",
+              "beta_neg_attn": 1.0,
+              "unembed_center": false,
+              "gamma_unembed": 2.0,
+              "v2_base": "7_engine_v2_hinge_erase"
+            },
+            "composite": 90.0
+          },
+          {
+            "condition": "8_engine_v2_signed_attn",
+            "end": {
+              "alpha_init": 1.0,
+              "alpha_sustain": 0.35,
+              "lambda_erase": 0.35,
+              "erase_kappa": 1.0,
+              "predictor_weight": 1.0,
+              "stop_logit_boost": 5.0,
+              "alpha_stop": 1.0,
+              "beta_attn": 0.5,
+              "alpha_caa": 2.0,
+              "hinge_kappa_floor": 2.6,
+              "lambda_hinge": 0.75,
+              "neg_span_mode": "clause",
+              "beta_neg_attn": 0.5,
+              "unembed_center": false,
+              "gamma_unembed": 2.0,
+              "v2_base": "7_engine_v2_hinge_erase"
+            },
+            "composite": 91.66666666666667
+          },
+          {
+            "condition": "9_engine_v2_full",
+            "start": {
+              "alpha_init": 1.0,
+              "alpha_sustain": 0.35,
+              "lambda_erase": 0.35,
+              "erase_kappa": 1.0,
+              "predictor_weight": 1.0,
+              "stop_logit_boost": 5.0,
+              "alpha_stop": 1.0,
+              "beta_attn": 0.5,
+              "alpha_caa": 2.0,
+              "hinge_kappa_floor": 2.6,
+              "lambda_hinge": 0.75,
+              "neg_span_mode": "clause",
+              "beta_neg_attn": 0.5,
+              "unembed_center": false,
+              "gamma_unembed": 2.0,
+              "v2_base": "7_engine_v2_hinge_erase"
+            },
+            "composite": 88.33333333333333
+          },
+          {
+            "condition": "9_engine_v2_full",
+            "end": {
+              "alpha_init": 1.0,
+              "alpha_sustain": 0.35,
+              "lambda_erase": 0.35,
+              "erase_kappa": 1.0,
+              "predictor_weight": 1.0,
+              "stop_logit_boost": 5.0,
+              "alpha_stop": 1.0,
+              "beta_attn": 0.5,
+              "alpha_caa": 2.0,
+              "hinge_kappa_floor": 2.6,
+              "lambda_hinge": 0.75,
+              "neg_span_mode": "clause",
+              "beta_neg_attn": 0.5,
+              "unembed_center": false,
+              "gamma_unembed": 1.5,
+              "v2_base": "7_engine_v2_hinge_erase"
+            },
+            "composite": 91.66666666666667
+          }
+        ],
+        "dev_composite": {
+          "x5_full_minus_erase": 88.33333333333333,
+          "7_engine_v2_hinge_erase": 91.66666666666667,
+          "8_engine_v2_signed_attn": 91.66666666666667,
+          "9_engine_v2_full": 91.66666666666667
+        },
+        "dev_selected_best_v2": "7_engine_v2_hinge_erase",
+        "v2_base_choice": {
+          "x5": {
+            "turn_cross": 100.0,
+            "constraint": 86.66666666666667,
+            "clean_stop": 66.66666666666667,
+            "fluency": 100.0,
+            "composite": 88.33333333333333,
+            "natural_eos": 80.0,
+            "n": 15,
+            "ms_per_token": 23.621433954967422,
+            "tok_per_s": 42.33443244412801,
+            "avg_new_tokens": 65.06666666666666,
+            "extra_prompt_tokens": 0.0,
+            "stop_reasons": {
+              "eos": 12,
+              "stop_string": 1,
+              "max_tokens": 2
+            }
+          },
+          "7": {
+            "turn_cross": 100.0,
+            "constraint": 86.66666666666667,
+            "clean_stop": 86.66666666666667,
+            "fluency": 93.33333333333333,
+            "composite": 91.66666666666667,
+            "natural_eos": 80.0,
+            "n": 15,
+            "ms_per_token": 24.604703295607848,
+            "tok_per_s": 40.642636002788485,
+            "avg_new_tokens": 47.4,
+            "extra_prompt_tokens": 0.0,
+            "stop_reasons": {
+              "eos": 12,
+              "stop_string": 3,
+              "max_tokens": 0
+            }
+          },
+          "chosen": "7_engine_v2_hinge_erase"
+        }
+      },
+      "phase3": {
+        "provenance": "coordinate search on 15 dev prompts with Qwen/Qwen2.5-1.5B; started from the v2.1 brief's values {'kappa_boundary': 1.0, 'tau_drift_stop': 1.8, 'sibling_k': 8, 'anti_echo_window': 12}; a change was adopted only if dev Composite improved by > 0.5",
+        "artifact": "artifacts/Qwen__Qwen2.5-1.5B/calib80/calibration.pt",
+        "history": [
+          {
+            "condition": "10_engine_v2_1",
+            "start": {
+              "alpha_init": 1.0,
+              "alpha_sustain": 0.35,
+              "lambda_erase": 0.35,
+              "erase_kappa": 1.0,
+              "predictor_weight": 1.0,
+              "stop_logit_boost": 5.0,
+              "alpha_stop": 1.0,
+              "beta_attn": 0.5,
+              "alpha_caa": 2.0,
+              "hinge_kappa_floor": 2.6,
+              "lambda_hinge": 0.75,
+              "neg_span_mode": "clause",
+              "beta_neg_attn": 0.5,
+              "unembed_center": false,
+              "gamma_unembed": 1.5,
+              "v2_base": "7_engine_v2_hinge_erase",
+              "kappa_boundary": 1.0,
+              "tau_drift_stop": 1.8,
+              "sibling_k": 8,
+              "anti_echo_window": 12
+            },
+            "composite": 85.0
+          },
+          {
+            "condition": "10_engine_v2_1",
+            "end": {
+              "alpha_init": 1.0,
+              "alpha_sustain": 0.35,
+              "lambda_erase": 0.35,
+              "erase_kappa": 1.0,
+              "predictor_weight": 1.0,
+              "stop_logit_boost": 5.0,
+              "alpha_stop": 1.0,
+              "beta_attn": 0.5,
+              "alpha_caa": 2.0,
+              "hinge_kappa_floor": 2.6,
+              "lambda_hinge": 0.75,
+              "neg_span_mode": "clause",
+              "beta_neg_attn": 0.5,
+              "unembed_center": false,
+              "gamma_unembed": 1.5,
+              "v2_base": "7_engine_v2_hinge_erase",
+              "kappa_boundary": 1.5,
+              "tau_drift_stop": 1.8,
+              "sibling_k": 4,
+              "anti_echo_window": 12
+            },
+            "composite": 93.33333333333333
+          }
+        ],
+        "dev_composite": {
+          "7_engine_v2_hinge_erase": 91.66666666666667,
+          "9_engine_v2_full": 91.66666666666667,
+          "10_engine_v2_1": 93.33333333333333
+        }
+      }
+    },
+    "artifact_dir": null,
+    "calibration_meta": null,
+    "calibration_diagnostics": null,
+    "device": "mps",
+    "dtype": "bfloat16",
+    "torch": "2.15.0"
+  },
+  "summary": {
+    "12_official_instruct_bare": {
+      "turn_cross": 97.5,
+      "constraint": 80.0,
+      "clean_stop": 60.0,
+      "fluency": 90.0,
+      "composite": 81.875,
+      "natural_eos": 47.5,
+      "n": 40,
+      "ms_per_token": 40.93101450500559,
+      "tok_per_s": 24.431351435907033,
+      "avg_new_tokens": 111.525,
+      "extra_prompt_tokens": 0.0,
+      "stop_reasons": {
+        "eos": 19,
+        "stop_string": 5,
+        "max_tokens": 16
+      }
+    },
+    "12_official_instruct_chat": {
+      "turn_cross": 100.0,
+      "constraint": 82.5,
+      "clean_stop": 62.5,
+      "fluency": 100.0,
+      "composite": 86.25,
+      "natural_eos": 57.5,
+      "n": 40,
+      "ms_per_token": 40.79212170205816,
+      "tok_per_s": 24.514537569384263,
+      "avg_new_tokens": 120.0,
+      "extra_prompt_tokens": 25.15,
+      "stop_reasons": {
+        "eos": 23,
+        "stop_string": 0,
+        "max_tokens": 17
+      }
+    },
+    "13_instruct_plus_orth_ban_bare": {
+      "turn_cross": 100.0,
+      "constraint": 85.0,
+      "clean_stop": 60.0,
+      "fluency": 90.0,
+      "composite": 83.75,
+      "natural_eos": 50.0,
+      "n": 40,
+      "ms_per_token": 41.60513431927047,
+      "tok_per_s": 24.03549505035067,
+      "avg_new_tokens": 114.9,
+      "extra_prompt_tokens": 0.0,
+      "stop_reasons": {
+        "eos": 20,
+        "stop_string": 4,
+        "max_tokens": 16
+      }
+    },
+    "13_instruct_plus_orth_ban_chat": {
+      "turn_cross": 100.0,
+      "constraint": 92.5,
+      "clean_stop": 62.5,
+      "fluency": 100.0,
+      "composite": 88.75,
+      "natural_eos": 57.5,
+      "n": 40,
+      "ms_per_token": 41.368550702072255,
+      "tok_per_s": 24.172952231316806,
+      "avg_new_tokens": 118.175,
+      "extra_prompt_tokens": 25.15,
+      "stop_reasons": {
+        "eos": 23,
+        "stop_string": 0,
+        "max_tokens": 17
+      }
+    }
+  }
+}

@@ -26,6 +26,7 @@ MODES = {
     "engine": ("engine v1", "6_full_assistant_engine"),
     "v2": ("engine v2 (hinge)", "7_engine_v2_hinge_erase"),
     "v21": ("engine v2.1", "10_engine_v2_1"),
+    "lean": ("engine v2.2 lean", "11_engine_v2_2_lean"),
 }
 
 

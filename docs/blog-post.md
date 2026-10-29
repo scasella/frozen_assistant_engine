@@ -1,6 +1,6 @@
 # Zero-Weight-Update Assistant Steering: How Non-Stationary Activation Lifecycle & Boundary-Coupled Erasure Beat 3-Shot In-Context Learning at Zero Token Cost
 
-*A three-phase engineering log on steering frozen Qwen2.5 base models into assistants with forward hooks alone: what
+*A four-phase engineering log on steering frozen Qwen2.5 base models into assistants with forward hooks alone: what
 worked, what didn't, and what we had to take back.*
 
 > **TL;DR.** On `Qwen/Qwen2.5-3B` (base) and 40 held-out prompts, a set of forward hooks with no training, no gradients
@@ -10,7 +10,9 @@ worked, what didn't, and what we had to take back.*
 > *at sentence boundaries* than mid-sentence, and banning words through an unembedding projection that leaves
 > neighbouring words untouched. On the smaller 1.5B model the engine is again best (86.2%), but most of its margins are
 > within noise. Several things we tried did nothing, and two of our own earlier claims turned out to be artifacts of a
-> hash-seed bug.
+> hash-seed bug. **Phase 4:** against the official Qwen2.5-3B-Instruct, given a 512-token budget, the hooks recover
+> **112% [87%, 150%]** of post-training's gain on these checks, with zero changed weights, a 3 MB artifact and 2.6×
+> shorter answers. Bolted onto Instruct, the lexical operator adds +3.1 [+0.6, +6.2].
 
 ## 1. The problem: base models already answer, then keep going
 
@@ -227,9 +229,9 @@ The boundary hinge and the sibling projection carry the gain. The drift-assisted
 unhelpful, and part of its apparent harm is a verifier artifact: without it, the model echoes "without using the word
 '**balanc**'", a truncated ban that the regex misses.
 
-Condition 10 without the anti-echo guard scores **96.2%**. We do not report that as a result. It was chosen by looking at
-test numbers, and the simpler "boundary hinge + sibling projection only" engine (dropping the drift stop as well) was
-never run as such. Both are hypotheses for a fresh held-out set.
+Condition 10 without the anti-echo guard scores **96.2%**. We do not report that as a result, because it was chosen by
+looking at test numbers. The simpler "boundary hinge + sibling projection only" engine was later run as condition 11
+(§7.1, 95.6%). It is just as test-informed, so both remain hypotheses for a fresh held-out set.
 
 **Final numbers, condition 10:**
 
@@ -278,12 +280,117 @@ objects with mass. It is a universal law that applies to all objects in the univ
 v1 answered "…168 books in 2 weeks. The answer is 168." and stopped. v2.1 gives the same answer, then writes `------`
 separators and new word problems until the token cap. Boundary-coupled erasure does not catch every drift genre.
 
-## 7. Caveats we would want a reviewer to raise
+## 7. Phase 4: what is it worth against real post-training?
+
+The obvious question is economic. Qwen ships an official post-trained `Qwen2.5-3B-Instruct`. Is a 3 MB hook file a
+substitute for it, a complement to it, or neither? We ran the official Instruct checkpoints through the same 40 prompts,
+the same greedy loop and the same frozen verifiers, both with Qwen's native chat template and with our bare
+`Question: … Answer:` frame.
+
+### 7.1 First, a leaner engine
+
+The leave-one-outs in §5.3 said only two v2.1 mechanisms matter. Condition 11 keeps exactly those, with no new
+coefficients, and fixes how they run:
+
+- **Text-only boundary trigger.** v2.1 also opened a boundary window when the *previous* step's completion score was
+  high, which cost one host sync at the stop layer on every token. The lean trigger uses only the token text (`. ! ?
+  \n`, or ≤ 2 steps after a newline).
+- **Sync-free sibling projection.** The projection's branches become `torch.where` selections, and its trace counters
+  stay on the GPU until the answer ends.
+- **Word-only search.** The sibling search multiplies only the 62% of the vocabulary that are word tokens.
+
+A single-read logit-space update is not possible here. The siblings come from the unprojected logits and the output
+must come from the projected state, so an exact version reads the unembedding twice; `logits + W·Δh` is itself a
+full-vocabulary product.
+
+The sync-free projection reproduces x9 **byte for byte on 40/40 prompts** on both models. Every response where
+condition 11 differs from x9 (3/40 on 3B) is on a prompt where the dropped drift-stop had fired.
+
+Measured in one session with the conditions interleaved, condition 11 decodes at **24.3 tok/s on 3B, within 2% of
+condition 7** (24.8), against 23.3 for v2.1. On prompts without a negation it is indistinguishable from condition 7.
+The brief's "12% overhead" came from comparing logs recorded hours apart; in one session v2.1's overhead was 6%. The
+mechanism set was read off the test leave-one-outs, so condition 11's 95.6 is not a held-out number; its claim is
+cost, not accuracy.
+
+### 7.2 The engine against Qwen2.5-3B-Instruct
+
+| 3B, 40 test prompts | Composite, 160 tokens | Composite, 512 tokens | tokens per answer (512) |
+|---|---|---|---|
+| raw base | 80.6 | 78.8 | 155 |
+| **engine v2.1** (`10_engine_v2_1`) | **94.4** | **96.2** | **82** |
+| Qwen2.5-3B-Instruct, chat template | 86.2 | 94.4 | 214 |
+| Qwen2.5-3B-Instruct, bare frame | 81.9 | 88.8 | 179 |
+| Instruct + our sibling-orthogonal ban | 88.8 | **97.5** | 211 |
+
+At the protocol's 160-token budget the engine beats Instruct by **+8.1 [+1.9, +14.4]**. We did not believe that
+number, and reading the outputs showed why: Instruct writes thorough markdown answers. 17 of 40 hit the cap, and 15 of
+those failed CleanStop as mid-sentence truncations. Instruct's chat-template answers contain zero contamination; post-training really did
+remove the drift. At 160 tokens even post-training's own gain over the raw base is unresolved (+5.6 [−1.2, +12.5]),
+so the "recovery ratio" the brief asked for is meaningless there.
+
+Given 512 tokens, Instruct ends on its own on 37 of 40 prompts, and post-training's gain becomes clear:
+**+15.6 [+8.8, +22.5]**. The engine scores 96.2 with no cap hits. Engine − Instruct is **+1.9 [−1.9, +5.6]**, and
+the engine recovers **112% [87%, 150%]** of post-training's gain. The honest summary is *parity* on this benchmark,
+with answers 2.6× shorter. On 1.5B it is not parity: at 512 tokens 1.5B-Instruct leads, 90.0 against 87.5 (engine −
+Instruct −2.5 [−10.0, +4.4], recovery 85% [40%, 135%]), on a stack that handicaps 1.5B arithmetic (§7.5).
+
+This benchmark measures four things: starting an answer, stopping cleanly, following machine-checkable rules, and not
+looping. It says nothing about helpfulness, depth, safety, refusals or multi-turn behaviour, where post-training does
+work the engine never attempts.
+
+### 7.3 Unit economics
+
+| 3B | Weights changed | Artifact | One-off cost | Extra prompt tokens | Clean-token KL from the base (nats/token) | Composite, 512 tokens |
+|---|---|---|---|---|---|---|
+| Engine v2.1 | 0 | 3.0 MB | 21 min of forward passes on 80 prompts, one laptop | 0 | **0.014** | 96.2 |
+| URIAL 3-shot prefix | 0 | 768-token prompt | none | 768 | 0.064 | – |
+| Qwen2.5-3B-Instruct | 86.8% of 3.09B parameters | 6.17 GB (the whole checkpoint) | SFT on > 1M examples + multi-stage RL | 25 (chat template) | 0.576 | 94.4 |
+
+The KL column needs care:
+- **How it is measured.** We teacher-force every condition along URIAL's clean held-out answers and measure
+  D_KL(P_raw ‖ P_condition) per token, excluding the 8 prompts where the engine deliberately bans a word the answer
+  uses.
+- **What the engine does to it.** It changes the base model's next-token distribution by 0.014 nats per token and
+  agrees with its top-1 prediction 97% of the time. Instruct moves it 40× further, as it is meant to.
+- **How to read it.** Low KL is not "better". It means the engine gets its score by intervening at a handful of
+  decisions, mostly where to stop and which words to avoid, while leaving everything else the base model knows alone.
+
+### 7.4 The lexical operator transfers to post-trained models
+
+Instruct's characteristic failure on negative constraints is echoing the banned word while restating the request:
+"Here are three programming languages without mentioning Python:". We attached condition 11's sibling-orthogonal
+projection to the Instruct checkpoint with zero re-tuning: the same γ and K from base-model dev, no calibration
+artifact.
+
+On 3B it raised negative-constraint compliance from **37.5% to 87.5%** and broke nothing. At 512 tokens, Instruct +
+ban is the best condition we have measured, **+3.1 [+0.6, +6.2]** over Instruct alone. Two of its "fixes" are
+evasions ("without mentioning the specific ones you requested to be avoided"). On 1.5B-Instruct it also caused one
+loop ("…not related to the question of not being related to the question…").
+
+### 7.5 A surprise: bf16 eager attention breaks 1.5B arithmetic
+
+While reading Instruct outputs we saw "15 + 9 = 14". It was not Instruct's fault. Module 4 needs eager attention to
+inject its bias, and in bf16 the eager path rounds pre-softmax scores. HF's own eager attention reproduces the same
+wrong digits.
+
+Under SDPA the 1.5B raw base solves **8/8** math prompts instead of 3/8, and its Composite rises from 75.6 to 81.2.
+Every 1.5B number in this project, the v2.1.0 release included, ran on that stack. Comparisons among them remain fair,
+but their level is depressed. 3B is unaffected: 8/8 under both stacks.
+
+Before rerunning Instruct on SDPA we fixed a rule: if 3B Instruct moved by more than 2 points, the SDPA run would
+become the reference. It moved 0.6, so the matched-stack comparison above stands. The fix for the engine, a fused
+attention kernel with an additive bias, is future work.
+
+## 8. Caveats we would want a reviewer to raise
 
 - **Small samples.** 40 test prompts, and 15 dev prompts for tuning, of which only 3 contain a negation. Condition 10's
   dev advantage over conditions 7 and 9 was one prompt, so most of its test gain was not visible during tuning.
-- **One model family, greedy decoding only.** Nothing here is shown for other architectures, sampling, longer outputs or
-  instruct models.
+- **One model family, greedy decoding only.** Nothing here is shown for other architectures or sampling. The only
+  post-trained models tested are Qwen2.5-Instruct, and only with the lexical operator (§7.4).
+- **The protocol stack depresses 1.5B.** bf16 eager attention costs the 1.5B model its arithmetic (§7.5); every
+  1.5B level is pessimistic.
+- **The token budget matters.** At 160 tokens the comparison with Instruct is dominated by truncation (§7.2). The
+  512-token rerun was planned after seeing that, and it is the fair comparison.
 - **The verifier has blind spots.**
   - Bracket-labelled continuations other than `[Question]`/`[Answer]` are not flagged.
   - Evasive meta-answers to negative-constraint prompts pass.
@@ -291,13 +398,18 @@ separators and new word problems until the token cap. Boundary-coupled erasure d
 
   We disclose these rather than patch them, because patching after reading test outputs would be test-driven.
 - **The negative-constraint gains are partly mechanical.** The unembedding projection makes banned surface forms hard to
-  emit. Inflections outside the banned set ("balancing") still get through.
+  emit. Inflections outside the banned set ("balancing") still get through, and so do sub-word spellings: on `t_ng_04`
+  the lean engine wrote "balanc" as `bal` + `anc`, which the verifier misses. The live studio's opt-in stem mode
+  closes both. It bans stem-initial tokens and masks stem-completing continuations. The model then restates the rule
+  as "balace", and short stems over-ban (`water` also bans "waterfall"). Stem mode is a demo setting, not a benchmark
+  condition, and it was motivated by a test prompt.
 - **URIAL is a reference, not a ceiling.** Its demonstrations are deliberately thorough, so its answers are long and hit
   the 160-token cap on 13 of 40 prompts. That costs it CleanStop.
-- **Throughput.** The hooks cost throughput: 22.6 tok/s against 26.2 for the unsteered model on 3B. The per-query time
-  advantage over URIAL comes from skipping the prefix *and* from shorter answers.
+- **Throughput.** In one session, the lean engine runs at 24.3 tok/s against 25.3 for the unsteered model on 3B. The
+  eager attention that Module 4 needs costs more than the hooks: SDPA runs the raw base at 29.5 tok/s. The per-query
+  time advantage over URIAL comes from skipping the prefix *and* from shorter answers.
 
-## 8. Reproduce it
+## 9. Reproduce it
 
 Every number above is regenerated from logged generations in seconds, without a model:
 
@@ -306,6 +418,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requiremen
 .venv/bin/python -m pytest -q
 .venv/bin/python -m eval.report results/Qwen__Qwen2.5-3B/test40 --out RESULTS.md --appendix results/Qwen__Qwen2.5-1.5B/test40
 .venv/bin/python cli.py --model Qwen/Qwen2.5-3B --modes raw,caa,v21     # try it live
+./run_demo.sh                                                            # live studio: 4-way arena + circuit telemetry
 ```
 
 The [README](../README.md) has the architecture and commands, [RESULTS.md](../RESULTS.md) has every table, interval and

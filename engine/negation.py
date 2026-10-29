@@ -91,8 +91,11 @@ def word_variants(word: str) -> set[str]:
     return forms
 
 
-def forbidden_token_ids(tokenizer, targets: list[str]) -> dict[int, str]:
-    """Single-token vocabulary entries (with and without a leading space) for every variant of every target."""
+def forbidden_token_ids(tokenizer, targets: list[str], morphology: str = "exact") -> dict[int, str]:
+    """Single-token vocabulary entries (with and without a leading space) for every variant of every target.
+
+    ``morphology="stem"`` adds every token that starts a word with the target's stem (``stem_token_ids``).
+    """
     out: dict[int, str] = {}
     for t in targets:
         for form in sorted(word_variants(t)):
@@ -100,6 +103,73 @@ def forbidden_token_ids(tokenizer, targets: list[str]) -> dict[int, str]:
                 ids = tokenizer.encode(prefix + form, add_special_tokens=False)
                 if len(ids) == 1:
                     out.setdefault(ids[0], prefix + form)
+    if morphology == "stem":
+        for i, s in stem_token_ids(tokenizer, [stem_of(t) for t in targets]).items():
+            out.setdefault(i, s)
+    elif morphology != "exact":
+        raise ValueError(f"unknown ban_morphology {morphology!r}")
     # Sorted by token id: projections are applied sequentially and do not commute, so a set/hash-dependent order
     # would make generations differ between processes.
     return dict(sorted(out.items()))
+
+
+# ---------------------------------------------------------------------------------------------
+# ban_morphology="stem": inflected forms and sub-word spellings of a negated target
+# ---------------------------------------------------------------------------------------------
+
+_SUFFIXES = ("ing", "es", "ed", "er", "e", "s")   # longest first
+_VOCAB_TEXT: dict[int, list[str]] = {}
+_CONTINUATIONS: dict[tuple[int, str], list[int]] = {}
+
+
+def stem_of(word: str) -> str:
+    """Lowercase root of a negated target: a word of five or more letters loses one trailing 'ing', 'es', 'ed', 'er',
+    'e' or 's' when at least four letters remain ('balance' -> 'balanc', 'computer' -> 'comput', 'water' -> 'water')."""
+    w = word.strip().lower()
+    if len(w) >= 5:
+        for suf in _SUFFIXES:
+            if w.endswith(suf) and len(w) - len(suf) >= 4:
+                return w[: -len(suf)]
+    return w
+
+
+def _vocab_text(tokenizer) -> list[str]:
+    key = id(tokenizer)
+    if key not in _VOCAB_TEXT:
+        _VOCAB_TEXT[key] = [tokenizer.decode([i]) for i in range(len(tokenizer))]
+    return _VOCAB_TEXT[key]
+
+
+def _starts_word_with(text: str, stem: str) -> bool:
+    """``text`` minus leading non-letters starts with ``stem`` (case-insensitively) without a camelCase join inside the
+    stem: 'Force', ' forces' and 'FORCE' match 'forc'; ' forCell' does not."""
+    head = re.sub(r"^[^A-Za-z]+", "", text)[: len(stem)]
+    return head.lower() == stem and (head[1:] == head[1:].lower() or head.isupper())
+
+
+def stem_token_ids(tokenizer, stems: list[str]) -> dict[int, str]:
+    """Every vocabulary token that begins a word with one of ``stems`` (' balance', ' balancing', 'Balancer', ...)."""
+    stems = [s for s in stems if s]
+    return {i: t for i, t in enumerate(_vocab_text(tokenizer)) if any(_starts_word_with(t, s) for s in stems)}
+
+
+def continuation_token_ids(tokenizer, remainder: str) -> list[int]:
+    """Tokens that continue a word (first character is a letter) and start with ``remainder``. Appended to generated
+    text whose last word spells the rest of a stem ('bal'), they complete it ('anc', 'ancing'). Sorted ids."""
+    key = (id(tokenizer), remainder)
+    if key not in _CONTINUATIONS:
+        _CONTINUATIONS[key] = [i for i, t in enumerate(_vocab_text(tokenizer))
+                               if t[:1].isascii() and t[:1].isalpha() and t.lower().startswith(remainder)]
+    return _CONTINUATIONS[key]
+
+
+def extend_word(partial: str, piece: str) -> str:
+    """The trailing ASCII letter run of ``partial + piece``, given that ``partial`` is the trailing run of the text so far."""
+    tail = re.search(r"[A-Za-z]*$", piece).group()
+    return partial + piece if tail == piece else tail
+
+
+def stem_completions(partial: str, stems: list[str]) -> list[str]:
+    """Remainders that would complete a stem from the unfinished last word ``partial`` ('bal' -> ['anc'])."""
+    p = partial.lower()
+    return sorted({s[len(p):] for s in stems if p and len(p) < len(s) and s.startswith(p)})

@@ -34,8 +34,9 @@ No weights were modified and no gradients were computed: every condition runs th
 | `x7_v2_1_minus_drift_stop` | 100.0 | 87.5 | 92.5 | 97.5 | **94.4** | 80.0 | 0 | 44.3 | 22.6 | 72 |
 | `x8_v2_1_minus_sibling_orth` | 100.0 | 87.5 | 87.5 | 90.0 | **91.2** | 70.0 | 0 | 42.7 | 23.4 | 79 |
 | `x9_v2_1_minus_anti_echo` | 100.0 | 92.5 | 95.0 | 97.5 | **96.2** | 82.5 | 0 | 44.1 | 22.7 | 73 |
+| `11_engine_v2_2_lean` | 100.0 | 92.5 | 92.5 | 97.5 | **95.6** | 82.5 | 0 | 43.9 | 22.8 | 71 |
 
-Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 30/0/10; `2_raw_base_plus_stops` 30/1/9; `3_urial_3shot_prefix` 18/9/13; `4_static_caa` 17/6/17; `5_lifecycle_plus_nullspace` 30/2/8; `6_full_assistant_engine` 31/4/5; `x1_lifecycle_only` 31/2/7; `x2_lifecycle_plus_erase` 32/2/6; `x3_full_minus_dynamic_stop` 29/4/7; `x4_pin_attention_only` 30/1/9; `x5_full_minus_erase` 29/3/8; `7_engine_v2_hinge_erase` 29/6/5; `8_engine_v2_signed_attn` 28/6/6; `9_engine_v2_full` 28/6/6; `10_engine_v2_1` 32/5/3; `x6_v2_1_minus_boundary_hinge` 30/5/5; `x7_v2_1_minus_drift_stop` 32/5/3; `x8_v2_1_minus_sibling_orth` 28/7/5; `x9_v2_1_minus_anti_echo` 33/5/2
+Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 30/0/10; `2_raw_base_plus_stops` 30/1/9; `3_urial_3shot_prefix` 18/9/13; `4_static_caa` 17/6/17; `5_lifecycle_plus_nullspace` 30/2/8; `6_full_assistant_engine` 31/4/5; `x1_lifecycle_only` 31/2/7; `x2_lifecycle_plus_erase` 32/2/6; `x3_full_minus_dynamic_stop` 29/4/7; `x4_pin_attention_only` 30/1/9; `x5_full_minus_erase` 29/3/8; `7_engine_v2_hinge_erase` 29/6/5; `8_engine_v2_signed_attn` 28/6/6; `9_engine_v2_full` 28/6/6; `10_engine_v2_1` 32/5/3; `x6_v2_1_minus_boundary_hinge` 30/5/5; `x7_v2_1_minus_drift_stop` 32/5/3; `x8_v2_1_minus_sibling_orth` 28/7/5; `x9_v2_1_minus_anti_echo` 33/5/2; `11_engine_v2_2_lean` 33/5/2
 
 ## 2. Per-category breakdown
 
@@ -62,6 +63,7 @@ Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 30/0/10; `2_raw_base
 | `x7_v2_1_minus_drift_stop` | 96.9 | 90.6 | 87.5 | 96.9 | 100.0 |
 | `x8_v2_1_minus_sibling_orth` | 96.9 | 90.6 | 71.9 | 96.9 | 100.0 |
 | `x9_v2_1_minus_anti_echo` | 96.9 | 90.6 | 96.9 | 96.9 | 100.0 |
+| `11_engine_v2_2_lean` | 96.9 | 90.6 | 96.9 | 93.8 | 100.0 |
 
 ### ConstraintScore (%)
 
@@ -86,6 +88,7 @@ Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 30/0/10; `2_raw_base
 | `x7_v2_1_minus_drift_stop` | 100.0 | 62.5 | 75.0 | 100.0 | 100.0 |
 | `x8_v2_1_minus_sibling_orth` | 100.0 | 62.5 | 75.0 | 100.0 | 100.0 |
 | `x9_v2_1_minus_anti_echo` | 100.0 | 62.5 | 100.0 | 100.0 | 100.0 |
+| `11_engine_v2_2_lean` | 100.0 | 62.5 | 100.0 | 100.0 | 100.0 |
 
 ## 3. Which modules contributed, and why
 
@@ -142,6 +145,44 @@ Conditions 8 and 9 build on `7_engine_v2_hinge_erase`, the better of x5 / 7 on t
 - **reasoning_math Composite**: `6_full_assistant_engine` 100.0% → `7_engine_v2_hinge_erase` 87.5% → `9_engine_v2_full` 87.5% → `10_engine_v2_1` 96.9%.
 - **negative_constraints ConstraintScore**: `6_full_assistant_engine` 50.0% → `7_engine_v2_hinge_erase` 50.0% → `9_engine_v2_full` 87.5% → `10_engine_v2_1` 75.0%.
 - **Mechanism activity on these prompts (condition 10):** EOS boosts by reason centroid 14, drift 11, newturn 4; boundary-window steps 336; unembedding projections 1005 (sibling fallbacks 0); prompts with an anti-echo set 8.
+
+### Phase 4 (v2.2 lean engine, post-trained reference) comparisons
+
+- **v2.2 lean vs. `1_raw_base`** (`1_raw_base` → `11_engine_v2_2_lean`): Composite **+15.0** [+9.4, +21.2] (TurnCross +0.0, Constraint +17.5, CleanStop +40.0, Fluency +2.5, NaturalEOS +7.5).
+- **v2.2 lean vs. `3_urial_3shot_prefix`** (`3_urial_3shot_prefix` → `11_engine_v2_2_lean`): Composite **+11.2** [+5.0, +17.5] (TurnCross +0.0, Constraint +20.0, CleanStop +25.0, Fluency +0.0, NaturalEOS +37.5).
+- **v2.2 lean vs. `10_engine_v2_1`** (`10_engine_v2_1` → `11_engine_v2_2_lean`): Composite **+1.2** [-1.2, +4.4] (TurnCross +0.0, Constraint +5.0, CleanStop +0.0, Fluency +0.0, NaturalEOS +2.5).
+- **v2.2 lean vs. `x9_v2_1_minus_anti_echo`** (`x9_v2_1_minus_anti_echo` → `11_engine_v2_2_lean`): Composite **-0.6** [-1.9, +0.0] (TurnCross +0.0, Constraint +0.0, CleanStop -2.5, Fluency +0.0, NaturalEOS +0.0).
+- **Byte identity with `x9`:** 37/40 responses identical. 11 x9 prompts had a drift-stop EOS boost (the mechanism condition 11 drops); the 3 differing prompts are `t_qa_05`, `t_rm_05`, `t_rm_06`, of which 3 had such a boost.
+- **Post-training's own gain (chat frame)** (`1_raw_base` → `12_official_instruct_chat`): Composite **+5.6** [-1.2, +12.5] (TurnCross +0.0, Constraint +7.5, CleanStop +10.0, Fluency +5.0, NaturalEOS -17.5).
+- **Post-training's own gain (bare frame)** (`1_raw_base` → `12_official_instruct_bare`): Composite **+1.2** [-6.2, +8.8] (TurnCross -2.5, Constraint +5.0, CleanStop +7.5, Fluency -5.0, NaturalEOS -27.5).
+
+**Engine vs. post-training** (Composite points, 95% paired-bootstrap CIs; recovery = (C_engine − C_raw) / (C_Instruct − C_raw), reported only when its denominator is resolved):
+
+| Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |
+|---|---|---|---|---|---|
+| protocol, raw = `1_raw_base` | `10_engine_v2_1` | `12_official_instruct_chat` | +5.6 [-1.2, +12.5] | +8.1 [+1.9, +14.4] | not resolved (point 244%; denominator ≤ 0 in 6% of resamples) |
+| protocol, raw = `1_raw_base` | `10_engine_v2_1` | `12_official_instruct_bare` | +1.2 [-6.2, +8.8] | +12.5 [+6.2, +18.8] | not resolved (point 1100%; denominator ≤ 0 in 40% of resamples) |
+| protocol, raw = `1_raw_base` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +5.6 [-1.2, +12.5] | +9.4 [+3.8, +15.0] | not resolved (point 267%; denominator ≤ 0 in 6% of resamples) |
+| protocol, raw = `1_raw_base` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | +1.2 [-6.2, +8.8] | +13.8 [+8.1, +19.4] | not resolved (point 1200%; denominator ≤ 0 in 40% of resamples) |
+| protocol, raw = `2_raw_base_plus_stops` | `10_engine_v2_1` | `12_official_instruct_chat` | +4.4 [-1.9, +11.2] | +8.1 [+1.9, +14.4] | not resolved (point 286%; denominator ≤ 0 in 11% of resamples) |
+| protocol, raw = `2_raw_base_plus_stops` | `10_engine_v2_1` | `12_official_instruct_bare` | +0.0 [-6.9, +6.9] | +12.5 [+6.2, +18.8] | undefined (Instruct ≤ raw base) |
+| protocol, raw = `2_raw_base_plus_stops` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +4.4 [-1.9, +11.2] | +9.4 [+3.8, +15.0] | not resolved (point 314%; denominator ≤ 0 in 11% of resamples) |
+| protocol, raw = `2_raw_base_plus_stops` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | +0.0 [-6.9, +6.9] | +13.8 [+8.1, +19.4] | undefined (Instruct ≤ raw base) |
+
+- **Sibling-orthogonal ban on Instruct (chat frame)** (`12_official_instruct_chat` → `13_instruct_plus_orth_ban_chat`): Composite **+2.5** [+0.6, +5.0] (TurnCross +0.0, Constraint +10.0, CleanStop +0.0, Fluency +0.0, NaturalEOS +0.0).
+  - negative_constraints ConstraintScore 37.5% → 87.5%; responses changed on 8 prompts (`t_ng_01`, `t_ng_02`, `t_ng_03`, `t_ng_04`, `t_ng_05`, `t_ng_06`, `t_ng_07`, `t_ng_08`).
+- **Sibling-orthogonal ban on Instruct (bare frame)** (`12_official_instruct_bare` → `13_instruct_plus_orth_ban_bare`): Composite **+1.9** [-0.6, +5.6] (TurnCross +2.5, Constraint +5.0, CleanStop +0.0, Fluency +0.0, NaturalEOS +2.5).
+  - negative_constraints ConstraintScore 62.5% → 87.5%; responses changed on 8 prompts (`t_ng_01`, `t_ng_02`, `t_ng_03`, `t_ng_04`, `t_ng_05`, `t_ng_06`, `t_ng_07`, `t_ng_08`).
+
+**Same-session decode speed** (`Qwen/Qwen2.5-3B`, 40 test prompts, conditions interleaved prompt by prompt, `scripts/bench_speed.py`):
+
+| Condition | tok/s | tok/s, negation prompts | tok/s, other prompts | ms/token | identical to log |
+|---|---|---|---|---|---|
+| `2_raw_base_plus_stops` | 25.34 | 25.38 | 25.33 | 39.5 | 40/40 |
+| `7_engine_v2_hinge_erase` | 24.81 | 24.80 | 24.81 | 40.3 | 40/40 |
+| `10_engine_v2_1` | 23.31 | 20.47 | 24.29 | 42.9 | 40/40 |
+| `x9_v2_1_minus_anti_echo` | 23.39 | 20.70 | 24.28 | 42.7 | 40/40 |
+| `11_engine_v2_2_lean` | 24.30 | 22.86 | 24.76 | 41.1 | 40/40 |
 
 ### Interpretation (hand-written after inspecting the logged generations)
 
@@ -322,6 +363,107 @@ collateral cost of output-side lexical suppression. The drift-coupled stop and t
 detectable here. Negative lexical constraints remain the weakest category at 75% for condition 10 on both models, and
 the verifier cannot tell an evasive non-answer from a compliant one.
 
+### Phase 4 interpretation (v2.2 lean engine and the post-trained reference; hand-written after inspecting the logs)
+
+**Condition 11 is an execution-cost result, not a new accuracy result.**
+- **Exactness.** `results/lean_equivalence_checks.txt` records two checks:
+  - the sync-free sibling projection reproduces x9 byte for byte on 40/40 prompts on both models;
+  - the text-only boundary trigger matches x9 on 39/40 on both models. The exception on both is `t_rm_05`, where the
+    v2.1 score clause had opened a boundary window.
+- **Where 11 differs from x9.** Every response where condition 11 differs from x9 is on a prompt where x9's
+  drift-assisted stop fired: 3/40 on 3B (`t_qa_05`, `t_rm_05`, `t_rm_06`) and 1/40 on 1.5B (`t_cd_01`). Only 3B
+  `t_rm_05` changes a metric: x9 ended it with the `[Reasoning: …]` tag the verifier does not flag, while 11 runs to
+  the token cap. Hence 95.6 against x9's 96.2. On 1.5B both score 86.2.
+- **Speed.** In the same session (`speed_bench.json`, conditions interleaved prompt by prompt, every output
+  byte-identical to its log), condition 11 decodes:
+  - **24.30 tok/s on 3B**, against 24.81 for condition 7 (−2.1%) and 23.31 for condition 10 (−6.0%);
+  - **39.02 tok/s on 1.5B**, against 39.82 (−2.0%) and 37.29 (−6.4%).
+
+  On the 32 prompts without a negation it is indistinguishable from condition 7 (24.76 vs. 24.81; 39.81 vs. 39.81).
+  On the 8 negation prompts the remaining cost is the second, word-only vocabulary product: 22.86 against 24.80 on
+  3B, up from 20.47 under condition 10.
+- **Where the "12%" came from.** The brief's 12% overhead compared logs generated hours apart. Measured in one session
+  the v2.1 overhead was 6%, so about half of the logged gap was session drift.
+- **Not a held-out estimate.** The mechanism set came from test leave-one-outs. On the 1.5B dev set condition 11
+  scored 95.0, against condition 10's reproduced 93.3 (one prompt's CleanStop). Dev does not contradict the
+  simplification, but nothing was selected from it.
+
+**Against the official post-trained checkpoints: a token-budget effect at 160 tokens, parity at 512.**
+- **At the protocol's 160 tokens (3B), the engine wins.**
+  - Condition 10 beats Qwen2.5-3B-Instruct by +8.1 [+1.9, +14.4] with Instruct's chat template, and by +12.5
+    [+6.2, +18.8] in the bare frame.
+  - But Instruct's own gain over the raw base is not resolved (+5.6 [−1.2, +12.5]), so the brief's recovery ratio
+    has no meaningful value at this budget.
+- **Why Instruct scores low at 160 tokens.** All 14 of its non-negation failures are answers cut by the cap.
+  Qwen2.5-Instruct writes thorough markdown (214 tokens per answer when allowed 512, against the engine's 82). With
+  its chat template it shows zero contamination. In the bare frame even Instruct drifts like a base model on 2/40
+  prompts (a FLAN `single-select problem` block, an `A:` turn), so its post-training is tied to the template.
+- **With a 512-token budget (tag `test40_512tok`), the comparison is fair, and it is parity.**
+  - Instruct-chat ends on its own on 37/40 prompts and scores 94.4; post-training's gain is now resolved, +15.6
+    [+8.8, +22.5].
+  - Condition 10 scores 96.2 (CleanStop 100%, no cap hits): engine − Instruct = +1.9 [−1.9, +5.6], and recovery is
+    **112% [87%, 150%]**. Condition 11 recovers 108% [76%, 157%].
+  - The raw base does not improve with room (78.8), because it uses the extra tokens to drift.
+  - **On 1.5B, Instruct leads at 512 tokens.** Instruct-chat scores 90.0 against the engine's 87.5, so engine −
+    Instruct = −2.5 [−10.0, +4.4] and recovery is 85% [40%, 135%]. That comparison runs on the eager-bf16 stack,
+    which depresses 1.5B arithmetic (see Numerics below), so it is pessimistic for the engine, but it is not parity.
+  - On these 40 prompts and four programmatic checks, the engine buys essentially all of what post-training buys,
+    with 0 changed weights, a 3.0 MB artifact, 0 extra prompt tokens and 2.6× shorter answers.
+  - This is not a claim about general assistant quality. The checks do not measure helpfulness, depth, safety or
+    multi-turn behaviour, where post-training does work the engine never attempts.
+- **The 512-token budget** was planned as a sensitivity check of the cap once Instruct's truncations were seen,
+  before any 512-token output existed. No coefficient or condition was chosen from it.
+
+**Condition 13: the lexical operator adds value on top of post-training.**
+- **3B, chat template.**
+  - The ban raises negative_constraints ConstraintScore from 37.5% to 87.5% at 160 tokens (Composite +2.5
+    [+0.6, +5.0]), and Instruct + ban is the best condition at 512 tokens: 97.5, +3.1 [+0.6, +6.2] over Instruct.
+  - It fixes `t_ng_01`, `t_ng_02`, `t_ng_06` and `t_ng_07`, and breaks nothing.
+  - Instruct's characteristic failure is echoing the banned word while restating the constraint ("Here are three
+    programming languages without mentioning Python:").
+  - Two "fixes" are evasions rather than better answers: "without mentioning any language that includes the word
+    "Py"" and "without mentioning the specific ones you requested to be avoided".
+- **1.5B, chat template.** The ban raises ConstraintScore from 37.5% to 75.0%, but Composite only by +0.6 [−4.4, +4.4]:
+  - `t_ng_02` collapses into a loop ("…not related to the question of not being related to the question…");
+  - `t_ng_03` gains a factual error the verifier passes: the ocean as a "salt-and-sugar-rich liquid".
+- **Untouched prompts.** The 32 prompts without a parsed negation are byte-identical to condition 12, as they must be.
+  Nothing was tuned on Instruct: γ, K and the fallback are the frozen base-model dev values.
+
+**Alignment tax: the engine barely moves the base distribution except where it bans a word.**
+- **Measured as:** clean-token KL D_KL(P_raw ‖ P_condition) at t > 4 along URIAL's clean held-out test answers.
+- **3B.**
+  - The engine's mean is 0.124 nats/token, but its median answer is 0.008. About two thirds of the total comes from
+    three negation prompts, where the ban suppresses words the teacher answer uses ("trees", "computers").
+  - Without the 8 negation prompts the engine is at **0.014 nats/token** with 97% top-1 agreement. That compares with
+    URIAL 0.064, static CAA 0.081, Instruct in the bare frame 0.186 and **Instruct with its chat template 0.576** (81%
+    top-1 agreement).
+- **1.5B.** Same ordering: engine 0.023–0.024 vs. Instruct-chat 0.213 without negations.
+- **What the measure is and is not.** It is a distance, not a quality score: post-training is *supposed* to move the
+  distribution. The claim is only that the engine reaches the same scores while leaving the base model's next-token
+  predictions on good assistant text essentially intact (calibration answers, in-sample for the engine: 0.014 vs.
+  0.432).
+
+**Numerics: the eager-bf16 attention that Module 4 needs costs Qwen2.5-1.5B its arithmetic.**
+- **The finding.** On 1.5B the raw base solves 3/8 math prompts on the protocol stack and **8/8** with HF's SDPA
+  attention (Composite 75.6 → 81.2). Errors look like "15 + 9 = 14" and "$50 − $28 = $42".
+- **Cause.**
+  - HF's own eager attention gives the identical wrong digits in bf16 on CPU, and `steer_eager` is bit-identical to
+    it on MPS.
+  - SDPA in bf16 and eager attention in fp32 are both correct.
+  - So the eager path's bf16 rounding of the pre-softmax scores is the cause.
+- **Scope.**
+  - Every 1.5B number in this report, the v2.1.0 release included, is depressed by this. The comparisons stay fair
+    among themselves (one shared stack), but the 1.5B *level* is not representative.
+  - 3B is not visibly affected: math is 8/8 under both stacks, and the raw base scores 80.6 vs. 78.8.
+- **Pre-registered rule.** Fixed before the SDPA runs: if 3B Instruct-chat moved by more than 2 points under SDPA, the
+  SDPA Instruct would become the recovery denominator.
+  - It moved 0.6 (86.2 → 85.6), so the protocol comparison stays primary.
+  - On 1.5B, Instruct-chat did not move (84.4) while the raw base gained 5.6. The 1.5B recovery figures are
+    confounded by numerics and should not be quoted.
+- **Throughput.** SDPA is also faster: the raw base runs at 29.5 vs. 26.1 tok/s on 3B, and 48.9 vs. 39.4 on 1.5B. Part
+  of the engine's throughput gap to Instruct is the eager attention its Module-4 bias needs, not the hooks. A fused
+  attention kernel with an additive bias would remove it; that is untested here.
+
 ## Methodology notes and caveats
 
 - **Drift / turn markers used by CleanStop and TurnCross** (line-anchored, case-insensitive, applied identically to every condition): new-turn labels `Question[ n]:` / `Q:` / `Q1.` / `[Question]` / `[Answer]` / `User:` / `Human:` / `Assistant:` / `A:`; forum boilerplate (`Posted by`, `N comments`, `Share |`, `Related links/questions`, `Reply`, `Upvote`, `Tags:`, `Asked by`, `See also:` …); and instruction-dataset templates leaking from pretraining (`A single-select problem`, `Available options:`, `Options are:`, `Choose your answer`, `Pick your answer`, `(a). yes`-style option lines, hallucinated `You are a helpful assistant`). The template/bracket/`A:` markers were added after inspecting the calibration negatives (Y⁻) and the 1.5B smoke-test outputs, because the raw Qwen2.5 base model's dominant failure is appending FLAN-style option blocks. All metrics are re-scored from the logged response text whenever this report is generated, so every condition is judged by the same final detector. The TurnCross *echo* rule was also tightened after inspecting test outputs: a response fails only if its opening reproduces ≥90% of the instruction's words and either starts with the same word (literal re-typing) or contains nothing beyond the restatement. The first, fuzzier version (first-line similarity > 0.8) mis-flagged assistant preambles such as "Here is the SQL query to find …" and math answers that restate the premise. The change only removed false positives, and it moved at most one prompt per condition.
@@ -359,6 +501,30 @@ the verifier cannot tell an evasive non-answer from a compliant one.
   - κ_boundary 1.0 → 1.5 moved dev from 85.0 to 91.7, and κ_boundary 2.0 scored 90.0;
   - sibling K = 4 beat K = 8 (93.3 vs. 91.7), a single-prompt difference.
   Dev composites: `7_engine_v2_hinge_erase` 91.7, `9_engine_v2_full` 91.7, `10_engine_v2_1` 93.3.
+
+### Phase 4 (v2.2 lean engine and post-trained reference) methodology
+
+- **Condition 11 (`11_engine_v2_2_lean`)** keeps the two v2.1 mechanisms that the leave-one-outs credit: the boundary-coupled hinge (κ_boundary = 1.5) and the sibling-orthogonalised projection (K = 4, γ = 1.5, centred). It drops the drift-assisted stop and the anti-echo guard. It has no new coefficients, and the stop check still starts at t ≥ 6 as in v2.1. **Its mechanism set was chosen from the test-set leave-one-outs, so its test score is not a held-out estimate.** Condition 10 remains the dev-selected headline.
+- **Lean execution (`boundary_trigger = "text"`, `sibling_fast = True`):**
+  - **Text-only boundary trigger.** The boundary window opens only when the last generated token contains `. ! ? \n`, or within 2 steps after a newline. The v2.1 score clause is dropped, so the stop-layer completion score is computed only on stop-check steps (punctuation tokens), as in condition 7. No other step has an extra host sync.
+  - **Sync-free projection.** The sibling-orthogonalised projection computes the same arithmetic without host synchronisation: the fallback and Gram-Schmidt branches are `torch.where` selections, and the trace counters stay on device until the answer ends.
+  - **Smaller sibling search.** The sibling search multiplies only the pre-indexed word-token rows of the unembedding (tokens containing an ASCII letter; 61.8% of Qwen2.5's vocabulary) instead of the whole vocabulary.
+- **Why a second vocabulary product remains.**
+  - The siblings are the top-K tokens of the *unprojected* logits, while the emitted logits must come from the *projected* state, so an exact implementation reads the unembedding twice on negation prompts.
+  - Applying the update in logit space (`logits + W·Δh`) does not avoid this: `W·Δh` is itself a full-vocabulary product.
+  - Any re-association that is not bit-identical in bf16 changes greedy outputs at near-ties.
+  - The lean path therefore keeps the exact computation, makes the search product 38% smaller, and removes the synchronisation stalls, which `scripts/bench_speed.py` shows were most of the cost.
+- **Post-trained reference (conditions 12 and 13).** The official `-Instruct` checkpoints were run on the same 40 prompts with the same greedy loop, `max_new_tokens = 160`, stop strings and frozen verifiers.
+  - **Frames.** `_bare` uses the identical `Question: {instruction}\nAnswer:` frame. `_chat` uses the checkpoint's chat template, which includes Qwen's default system prompt; its *Extra ctx tokens* column counts the template's overhead over the bare frame.
+  - **Turn endings.** Generation ends on either turn-ending id in the checkpoint's `generation_config` (`<|im_end|>`, `<|endoftext|>`).
+  - **Decoding.** Qwen's recommended sampling settings (temperature 0.7, top-p 0.8, repetition penalty 1.05) are *not* used: every condition decodes greedily.
+- **Condition 13** attaches only condition 11's lexical operator to the Instruct checkpoint. It uses the same frozen base-dev coefficients and no calibration artifact, and nothing was tuned on Instruct. It can only change the 8 prompts that contain a parsed negation.
+- **Post-training recovery** is (C_engine − C_raw) / (C_Instruct − C_raw), with a 95% paired-bootstrap CI over prompts (10k resamples). The headline uses the raw base without stop strings (condition 1), as in every other comparison; the version over condition 2 (with stop strings) is listed too.
+- **Frozen verifiers.** The verifiers were written for base-model failure modes and were not changed for Instruct outputs. In particular, CleanStop fails answers that hit the 160-token cap mid-sentence, which penalises verbose answers.
+- **Sensitivity runs** (separate tags, never mixed with the protocol logs):
+  - `test40_512tok` reruns conditions 1, 10, 11, 12 and 13 (chat) with `max_new_tokens = 512`. It was planned after seeing Instruct's 160-token truncations and before any 512-token output existed. Its latencies are not comparable: part of it ran alongside the 1.5B KL job.
+  - `test40_sdpa` reruns conditions 1, 2, 12 and 13 (chat) on HF's SDPA attention. The engine conditions cannot run there: SDPA has no slot for the Module-4 bias, and `AssistantEngine` refuses `pin_attention` without `steer_eager`.
+- **Clean-token KL** (`eval/alignment_tax.py`). Each condition is teacher-forced along the same clean answers; engine conditions replay them one token per pass with the full per-step schedule, including the EOS boosts and the lexical ban. The reference is the raw base in the bare frame, decoded step by step. The answers are URIAL-teacher text in the base model's style, not Instruct-style text.
 
 ## 4. Calibration diagnostics (per target layer)
 
@@ -1109,6 +1275,744 @@ Options:
 The answer is 36.
 ~~~
 
+## 7. Economics versus post-training (Phase 4)
+
+### Unit economics
+
+| Approach | Weights changed | Artifact / weight delta | One-off cost | Extra context tokens | Clean-token KL, held-out: all / no-negation prompts (nats) | Composite, 160 tokens | Composite, 512 tokens | tok/s |
+|---|---|---|---|---|---|---|---|---|
+| Raw base (`1_raw_base`) | 0 | – | none | 0 | 0 (reference) | **80.6** | 78.8 | 26.1 |
+| URIAL 3-shot prefix (`3_urial_3shot_prefix`) | 0 | 768-token prompt | none | 768 | 0.054 / 0.064 | **84.4** | – | 21.1 |
+| Static CAA (`4_static_caa`) | 0 | 3.0 MB (same artifact) | 21 min of forward passes on 80 prompts | 0 | 0.078 / 0.081 | **78.8** | – | 26.3 |
+| **Engine v2.1** (`10_engine_v2_1`) | 0 | 3.0 MB | 21 min of forward passes on 80 prompts | 0 | 0.124 / 0.014 | **94.4** | 96.2 | 23.3 |
+| **Engine v2.2 lean** (test-informed) (`11_engine_v2_2_lean`) | 0 | 3.0 MB | 21 min of forward passes on 80 prompts | 0 | 0.119 / 0.014 | **95.6** | 95.6 | 24.3 |
+| Official Instruct, chat template (`12_official_instruct_chat`) | 86.8% of 3.09B | 6.17 GB (whole checkpoint) | SFT on > 1M examples + multi-stage RL; compute not disclosed | 25 | 0.524 / 0.576 | **86.2** | 94.4 | 24.5 |
+| Official Instruct, bare frame (`12_official_instruct_bare`) | 86.8% of 3.09B | 6.17 GB (whole checkpoint) | SFT on > 1M examples + multi-stage RL; compute not disclosed | 0 | 0.201 / 0.186 | **81.9** | 88.8 | 24.4 |
+| Instruct + sibling-orth ban, chat (`13_instruct_plus_orth_ban_chat`) | 86.8% of 3.09B | 6.17 GB (whole checkpoint) + 0 | SFT on > 1M examples + multi-stage RL; compute not disclosed | 25 | – | **88.8** | 97.5 | 24.2 |
+
+- **Weights changed / size.** The engine edits no weights; its artifact is the calibration file read by the hooks. The Instruct row compares every bf16 tensor of the two public checkpoints (`scripts/weight_delta.py`).
+- **Clean-token KL.** Mean D_KL(P_raw ‖ P_condition) in nats per token, teacher-forced at steps t > 4 on URIAL's clean answers to the test prompts (`eval/alignment_tax.py`; the calibration-answer version is in the detail table below). *no-negation* drops the 8 prompts with a parsed negation, where the lexical ban suppresses words the teacher answer uses by design. Lower means the condition leaves the base model's predictions on good assistant text more intact. It is a distance, not a quality score: Instruct is *meant* to move the distribution. The single-pass vs. step-by-step numerical floor of the raw base is 0.0007 nats.
+- **Composite, 512 tokens** reruns the same prompts with a 512-token budget (tag `test40_512tok`). Instruct writes longer answers, and the 160-token cap cuts many of them mid-sentence, which fails CleanStop.
+- **Stack.** Every row ran in bf16 on the steer_eager (HF-eager) attention, which Module 4 needs. The SDPA rows of the sensitivity table quantify what that costs the attention-agnostic conditions.
+- **tok/s** for conditions 2, 7, 10, x9 and 11 is the same-session benchmark; other rows are from their logs.
+- **One-off cost** for Instruct is the Qwen2.5 technical report's description of post-training (arXiv 2412.15115); the engine's is measured wall time on the M4 Pro (trajectory generation and state collection).
+
+### Post-trained reference conditions (all values in %)
+
+| Condition | TurnCross | Constraint | CleanStop | Fluency | **Composite** | NaturalEOS | Extra ctx tokens | ms/token | tok/s | avg new tokens |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `12_official_instruct_bare` | 97.5 | 80.0 | 60.0 | 90.0 | **81.9** | 47.5 | 0 | 40.9 | 24.4 | 112 |
+| `12_official_instruct_chat` | 100.0 | 82.5 | 62.5 | 100.0 | **86.2** | 57.5 | 25 | 40.8 | 24.5 | 120 |
+| `13_instruct_plus_orth_ban_bare` | 100.0 | 85.0 | 60.0 | 90.0 | **83.8** | 50.0 | 0 | 41.6 | 24.0 | 115 |
+| `13_instruct_plus_orth_ban_chat` | 100.0 | 92.5 | 62.5 | 100.0 | **88.8** | 57.5 | 25 | 41.4 | 24.2 | 118 |
+
+Stop reasons (eos / stop_string / max_tokens): `12_official_instruct_bare` 19/5/16; `12_official_instruct_chat` 23/0/17; `13_instruct_plus_orth_ban_bare` 20/4/16; `13_instruct_plus_orth_ban_chat` 23/0/17
+
+### Composite by category, engine vs. Instruct (%)
+
+| Condition | direct_qa | format_constraints | negative_constraints | reasoning_math | code_and_sql |
+|---|---|---|---|---|---|
+| `1_raw_base` | 65.6 | 84.4 | 87.5 | 71.9 | 93.8 |
+| `10_engine_v2_1` | 96.9 | 90.6 | 87.5 | 96.9 | 100.0 |
+| `11_engine_v2_2_lean` | 96.9 | 90.6 | 96.9 | 93.8 | 100.0 |
+| `12_official_instruct_bare` | 75.0 | 84.4 | 81.2 | 81.2 | 87.5 |
+| `12_official_instruct_chat` | 75.0 | 100.0 | 81.2 | 87.5 | 87.5 |
+| `13_instruct_plus_orth_ban_bare` | 75.0 | 84.4 | 90.6 | 81.2 | 87.5 |
+| `13_instruct_plus_orth_ban_chat` | 75.0 | 100.0 | 93.8 | 87.5 | 87.5 |
+
+### Sensitivity of the post-training comparison
+
+| Condition | Composite, protocol: eager attention, 160 tokens | Composite, SDPA attention, 160 tokens | Composite, eager attention, 512 tokens | hit token cap, eager attention, 160 tokens | hit token cap, SDPA attention, 160 tokens | hit token cap, eager attention, 512 tokens |
+|---|---|---|---|---|---|---|
+| `1_raw_base` | 80.6 | 78.8 | 78.8 | 10/40 | 12/40 | 7/40 |
+| `2_raw_base_plus_stops` | 81.9 | 80.6 | – | 9/40 | 10/40 | – |
+| `10_engine_v2_1` | 94.4 | – | 96.2 | 3/40 | – | 0/40 |
+| `11_engine_v2_2_lean` | 95.6 | – | 95.6 | 2/40 | – | 1/40 |
+| `12_official_instruct_chat` | 86.2 | 85.6 | 94.4 | 17/40 | 17/40 | 3/40 |
+| `12_official_instruct_bare` | 81.9 | 82.5 | 88.8 | 16/40 | 15/40 | 3/40 |
+| `13_instruct_plus_orth_ban_chat` | 88.8 | 89.4 | 97.5 | 17/40 | 17/40 | 3/40 |
+
+| Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |
+|---|---|---|---|---|---|
+| protocol: eager attention, 160 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +5.6 [-1.2, +12.5] | +8.1 [+1.9, +14.4] | not resolved (point 244%; denominator ≤ 0 in 6% of resamples) |
+| protocol: eager attention, 160 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | +1.2 [-6.2, +8.8] | +12.5 [+6.2, +18.8] | not resolved (point 1100%; denominator ≤ 0 in 40% of resamples) |
+| protocol: eager attention, 160 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +5.6 [-1.2, +12.5] | +9.4 [+3.8, +15.0] | not resolved (point 267%; denominator ≤ 0 in 6% of resamples) |
+| protocol: eager attention, 160 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | +1.2 [-6.2, +8.8] | +13.8 [+8.1, +19.4] | not resolved (point 1200%; denominator ≤ 0 in 40% of resamples) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `10_engine_v2_1` | `12_official_instruct_chat` | +6.9 [+0.0, +13.8] | +8.8 [+3.1, +14.4] | not resolved (point 227%; denominator ≤ 0 in 3% of resamples) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `10_engine_v2_1` | `12_official_instruct_bare` | +3.8 [-4.4, +11.9] | +11.9 [+5.0, +18.8] | not resolved (point 417%; denominator ≤ 0 in 20% of resamples) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +6.9 [+0.0, +13.8] | +10.0 [+3.8, +16.2] | not resolved (point 245%; denominator ≤ 0 in 3% of resamples) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `11_engine_v2_2_lean` | `12_official_instruct_bare` | +3.8 [-4.4, +11.9] | +13.1 [+6.9, +19.4] | not resolved (point 450%; denominator ≤ 0 in 20% of resamples) |
+| eager attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +15.6 [+8.8, +22.5] | +1.9 [-1.9, +5.6] | **112%** [87%, 150%] |
+| eager attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | +10.0 [+1.2, +18.8] | +7.5 [+1.9, +13.1] | **175%** [113%, 600%] |
+| eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +15.6 [+8.8, +22.5] | +1.2 [-4.4, +6.2] | **108%** [76%, 157%] |
+| eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | +10.0 [+1.2, +18.8] | +6.9 [+0.6, +13.1] | **169%** [104%, 600%] |
+
+### Clean-token KL distortion in detail
+
+Mean KL is pooled over tokens; *median answer* is the median of per-answer means; *no negation* pools only answers to prompts without a parsed negation (on the others the engine's lexical ban suppresses words the teacher answer uses, by design).
+
+| Condition | KL, calib | KL, held-out | median answer, calib / held-out | no negation, calib / held-out | KL t ≤ 4, calib | top-1 agreement, calib / held-out |
+|---|---|---|---|---|---|---|
+| `raw_base_single_pass` | 0.0007 | 0.0007 | 0.0007 / 0.0006 | 0.0007 / 0.0006 | 0.001 | 99.1% / 99.4% |
+| `3_urial_3shot_prefix` | 0.0915 | 0.0538 | 0.0418 / 0.0463 | 0.0923 / 0.0636 | 0.355 | 92.3% / 93.7% |
+| `4_static_caa` | 0.0813 | 0.0784 | 0.0763 / 0.0797 | 0.0807 / 0.0808 | 0.121 | 90.6% / 91.7% |
+| `10_engine_v2_1` | 0.0707 | 0.1238 | 0.0094 / 0.0081 | 0.0141 / 0.0140 | 0.177 | 97.1% / 97.3% |
+| `11_engine_v2_2_lean` | 0.0644 | 0.1188 | 0.0090 / 0.0081 | 0.0140 / 0.0140 | 0.084 | 97.1% / 97.3% |
+| `12_official_instruct_bare` | 0.1370 | 0.2006 | 0.1284 / 0.1277 | 0.1194 / 0.1861 | 0.833 | 89.3% / 86.2% |
+| `12_official_instruct_chat` | 0.4441 | 0.5240 | 0.4590 / 0.4635 | 0.4318 / 0.5758 | 5.745 | 82.4% / 81.2% |
+
+71 calibration answers (7687 tokens at t > 4) and 27 held-out answers (2234 tokens).
+
+## 8. Engine vs. post-trained Instruct (verbatim)
+
+Selected by rule: the 8 prompts where the sibling-orthogonal ban changed the Instruct (chat) answer, then the first 6 prompts (by id) whose Composite differs between `10_engine_v2_1` and `12_official_instruct_chat`. Outputs are shown after stop-string truncation.
+
+### `t_ng_01` (negative_constraints)
+
+**Prompt:** Explain gravity in one paragraph without using the word 'force'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 81 tokens
+
+~~~text
+Gravity is a fundamental natural phenomenon that governs the attraction between objects with mass. It is a universal law that applies to all objects in the universe, regardless of their size or composition. Gravity is responsible for the formation of celestial bodies like planets and stars, and it also plays a crucial role in the behavior of objects on Earth, such as the motion of falling objects and the orbits of satellites around planets.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 81 tokens
+
+~~~text
+Gravity is a fundamental natural phenomenon that governs the attraction between objects with mass. It is a universal law that applies to all objects in the universe, regardless of their size or composition. Gravity is responsible for the formation of celestial bodies like planets and stars, and it also plays a crucial role in the behavior of objects on Earth, such as the motion of falling objects and the orbits of satellites around planets.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 93 tokens
+
+~~~text
+Gravity is a fundamental force that attracts any two masses, any size, in the universe. It is a natural phenomenon by which objects with mass are drawn toward each other, influencing the motion of planets, stars, and galaxies. This phenomenon is responsible for the formation and structure of celestial bodies and the stability of orbits. Gravity shapes the universe, from the smallest subatomic particles to the largest cosmic structures, by exerting a pull that can be felt across vast distances.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 105 tokens
+
+~~~text
+Gravity is a fundamental interaction that attracts masses towards each other. It shapes the structure of the universe, influencing the orbits of planets, the formation of stars and galaxies, and even the behavior of subatomic particles. This phenomenon is ubiquitous and can be observed in the everyday movements of objects on Earth, such as the fall of an apple from a tree or the trajectory of a thrown ball. Gravity arises from the curvature of spacetime caused by the presence of mass and energy, as described by Einstein's theory of general relativity.
+~~~
+
+### `t_ng_02` (negative_constraints)
+
+**Prompt:** List 3 programming languages without mentioning Python.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 5 tokens
+
+~~~text
+C++, Java, C
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 5 tokens
+
+~~~text
+C, C++, Java
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 144 tokens
+
+~~~text
+Certainly! Here are three programming languages without mentioning Python:
+
+1. **JavaScript** - A high-level, interpreted programming language that is commonly used for web development, where it runs on the client-side (in the browser) and can also be used on the server-side through Node.js.
+
+2. **Java** - A widely-used, class-based, object-oriented programming language that is designed to have as few implementation dependencies as possible. It is used for developing software for a variety of platforms, including Android mobile applications.
+
+3. **C++** - An extension of the C programming language, designed to provide more functionality and efficiency. It is often used for system programming, game development, and other performance-critical applications.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 152 tokens
+
+~~~text
+Certainly! Here are three programming languages without mentioning any language that includes the word "Py" or is commonly known as a derivative of it:
+
+1. **C++**: A general-purpose programming language that supports object-oriented programming, procedural programming, and generic programming. It is widely used for system programming, game development, and other performance-critical applications.
+
+2. **Java**: A high-level, class-based, object-oriented programming language that is designed to have as few implementation dependencies as possible. It is used for developing software for a wide range of platforms and devices.
+
+3. **JavaScript**: A programming language that is a core technology of the World Wide Web, primarily used for web development but also used in other areas such as server-side scripting and desktop applications.
+~~~
+
+### `t_ng_03` (negative_constraints)
+
+**Prompt:** Describe the ocean without using the word 'water'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 122 tokens
+
+~~~text
+The ocean is a vast expanse of liquid that covers the majority of the Earth's surface. It is a complex and dynamic system that plays a crucial role in regulating the planet's climate and supporting a wide range of marine life. The ocean is not just a body of liquid but a living ecosystem that is interconnected with the atmosphere and the landmasses surrounding it. It is a vast and diverse environment that is home to a wide range of species, from tiny plankton to massive whales. The ocean is also a source of food and resources for humans, and it plays a critical role in the global economy.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 122 tokens
+
+~~~text
+The ocean is a vast expanse of liquid that covers the majority of the Earth's surface. It is a complex and dynamic system that plays a crucial role in regulating the planet's climate and supporting a wide range of marine life. The ocean is not just a body of liquid but a living ecosystem that is interconnected with the atmosphere and the landmasses surrounding it. It is a vast and diverse environment that is home to a wide range of species, from tiny plankton to massive whales. The ocean is also a source of food and resources for humans, and it plays a critical role in the global economy.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 134 tokens
+
+~~~text
+The vast expanse stretches endlessly, a canvas of endless depths. Vast expanses of it are shrouded in mystery, while others are bathed in the golden hues of the setting sun. It is a realm of countless creatures, each with its own unique story and role. The ocean's surface is a mirror of the sky, reflecting the clouds and the changing moods of the weather. Beneath the surface, it is a labyrinth of hidden wonders, from the towering peaks of underwater mountains to the abyssal plains that stretch towards the stars. The ocean is a place of both tranquility and tumult, a place where life thrives and secrets are kept.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 124 tokens
+
+~~~text
+The vast expanse stretches endlessly, a canvas of endless depths and surfaces. Vast expanses of it shimmer with the light of the sun, reflecting hues of blue and green. It is a realm of currents and eddies, where the gentle caress of waves meets the fierce roar of breaking waves. Creatures of all shapes and sizes navigate its depths and surfaces, from the smallest plankton to the largest whales. The ocean is a place of mystery and wonder, a place where the boundaries between land and sea blur, and where the echoes of distant storms and the whispers of distant shores resonate through its vastness.
+~~~
+
+### `t_ng_04` (negative_constraints)
+
+**Prompt:** Explain how to ride a bicycle without using the word 'balance'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+To ride a bicycle effectively and safely, you need to understand the concept of momentum and how it relates to the bike's movement. Here's a step-by-step guide on how to ride a bicycle without using the word 'balancing':
+
+1. Start by getting on the bike and placing your feet on the pedals. Make sure your body is centered over the bike and your weight is evenly distributed between both feet.
+
+2. Begin pedaling slowly, using your legs to generate momentum. As you pedal, the bike will start to move forward, and you'll feel a sense of forward motion.
+
+3. As you pedal, keep your body relaxed and your arms and legs loose. This will help you maintain a smooth and steady pace.
+
+4. To maintain your momentum, continue pedaling at a consistent pace
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 131 tokens
+
+~~~text
+To ride a bicycle without using the word 'balanc', you can follow these steps:
+
+1. Start by getting on the bicycle and placing your feet on the pedals.
+2. Push off the ground with your feet to get the bicycle moving.
+3. As the bicycle starts to move, use your legs to pedal forward.
+4. Keep your body relaxed and stable, and use your arms to steer the bicycle in the direction you want to go.
+5. As you gain speed, you can use your arms to steer more precisely and maintain control of the bicycle.
+
+By following these steps, you can ride a bicycle without using the word 'balanc'.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Riding a bicycle involves a series of coordinated movements that allow you to maintain control and stability. Here’s a step-by-step guide to help you understand how to ride a bicycle without using the word 'balance':
+
+1. **Positioning**: Sit on the bicycle with your feet flat on the ground. Your knees should be slightly bent, and your feet should be able to reach the pedals comfortably.
+
+2. **Pedaling**: Start by pedaling. Use your legs to turn the pedals, which in turn turns the wheels. The faster you pedal, the faster the bicycle will go.
+
+3. **Pushing Off**: To get the bicycle moving, you need to push off the ground with your feet. This is often referred to as "getting a run-up" or "getting a push-off."
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Riding a bicycle involves a series of coordinated movements that allow you to maintain control and stability on the bike. Here’s a step-by-step guide to help you understand how to ride a bicycle without using the word 'balancing':
+
+1. **Positioning**: Sit on the bicycle with your feet flat on the ground. Your knees should be slightly bent, and your feet should be able to touch the ground easily.
+
+2. **Pedaling**: Place your dominant foot on the pedal closest to you and your other foot on the pedal farthest from you. Push the pedal closest to you down, which will lift your dominant foot off the ground and bring it to the pedal farthest from you. Repeat this motion to keep moving forward.
+
+3. **Using the Seat**: The seat height is crucial.
+~~~
+
+### `t_ng_05` (negative_constraints)
+
+**Prompt:** Write a short description of a forest without using the words 'tree' or 'trees'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✘ · stop=`eos` · 122 tokens
+
+~~~text
+A forest is a vast and diverse ecosystem that encompasses a multitude of plant and animal species. It is a place where the earth's natural beauty is on full display, with towering and ancient structures that have stood the test of time. The forest is a place of tranquility and serenity, where the sounds of nature are the only music that plays. It is a place where the earth's natural beauty is on full display, with towering and ancient structures that have stood the test of time. The forest is a place of tranquility and serenity, where the sounds of nature are the only music that plays.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✘ · stop=`eos` · 122 tokens
+
+~~~text
+A forest is a vast and diverse ecosystem that encompasses a multitude of plant and animal species. It is a place where the earth's natural beauty is on full display, with towering and ancient structures that have stood the test of time. The forest is a place of tranquility and serenity, where the sounds of nature are the only music that plays. It is a place where the earth's natural beauty is on full display, with towering and ancient structures that have stood the test of time. The forest is a place of tranquility and serenity, where the sounds of nature are the only music that plays.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 119 tokens
+
+~~~text
+Amidst the lush landscape, a tapestry of vegetation unfurls, where every crevice and hollow is filled with life. Sunlight filters through the canopy, casting dappled shadows that dance upon the ground. The air is thick with the scent of earth and dampness, a symphony of unseen creatures whispering secrets in the breeze. Moss carpets the forest floor, and the ground itself is a mosaic of roots and decaying leaves. In this verdant expanse, every part of the environment is interconnected, forming a complex ecosystem where the very fabric of the land is alive.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 118 tokens
+
+~~~text
+Amidst the lush landscape, a tapestry of vegetation unfurls, where every crevice and hollow is filled with life. Sunlight filters through the canopy, casting dappled shadows that dance upon the ground. The air is thick with the scent of earth and moisture, a symphony of rustling leaves and the soft murmur of unseen creatures. Moss carpets the forest floor, and vines wind their way up trunks, intertwining in intricate patterns. The ground is a mosaic of fallen leaves and decaying matter, nurturing a rich undergrowth of ferns and wildflowers.
+~~~
+
+### `t_ng_06` (negative_constraints)
+
+**Prompt:** Explain what the internet is without using the word 'computer'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 84 tokens
+
+~~~text
+The internet is a global network of interconnected devices and servers that allows people to communicate and share information with each other. It is made up of millions of smaller networks, such as local area networks and wide area networks, that are connected together through routers and switches. The internet is used for a variety of purposes, including browsing the web, sending and receiving emails, and accessing online services such as social media and streaming video.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 84 tokens
+
+~~~text
+The internet is a global network of interconnected devices and servers that allows people to communicate and share information with each other. It is made up of millions of smaller networks, such as local area networks and wide area networks, that are connected together through routers and switches. The internet is used for a variety of purposes, including browsing the web, sending and receiving emails, and accessing online services such as social media and streaming video.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 110 tokens
+
+~~~text
+The internet is a global network of interconnected computers and devices that communicate with each other using standardized protocols. Imagine it as a vast, invisible web where information travels from one place to another, connecting people, businesses, and devices around the world. This network allows users to share data, communicate, and access a wide range of information and services, from browsing websites and sending emails to making online purchases and streaming videos. It's a crucial part of modern life, enabling instant communication and the exchange of ideas and knowledge on a scale that was once unimaginable.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 126 tokens
+
+~~~text
+The internet is a global network of interconnected devices and servers that communicate with each other using standardized protocols. Imagine it as a vast library where every book is a website, and every reader is a device like a smartphone or a laptop that can access these books. Just as you can find any book you're looking for in this library by typing in the right search term, you can find any information or resource you need by typing a query into a search engine or navigating to a specific website. This network allows people and devices from all over the world to share information, communicate, and collaborate in real-time, regardless of their physical location.
+~~~
+
+### `t_ng_07` (negative_constraints)
+
+**Prompt:** Name three animals that live in Africa without mentioning lions or elephants.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 6 tokens
+
+~~~text
+giraffes and zebras
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 12 tokens
+
+~~~text
+giraffes, zebras, and wildebeests
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 134 tokens
+
+~~~text
+Certainly! Here are three animals that live in Africa without mentioning lions or elephants:
+
+1. **Cheetahs** - Known for their incredible speed, cheetahs are the fastest land animals and are commonly found in grasslands and savannas across Africa.
+
+2. **Giraffes** - These majestic animals are easily recognizable by their long necks and are found in the savannas and woodlands of East, Central, and Southern Africa.
+
+3. **Crocodiles** - While not typically associated with the open savannas, crocodiles can be found in various habitats across Africa, including rivers, lakes, and wetlands.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 36 tokens
+
+~~~text
+Certainly! Here are three animals that live in Africa without mentioning the specific ones you requested to be avoided:
+
+1. Giraffes
+2. Zebras
+3. Rhinos
+~~~
+
+### `t_ng_08` (negative_constraints)
+
+**Prompt:** Explain why people need sleep without using the word 'rest'.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 85 tokens
+
+~~~text
+People need sleep because it is essential for their physical and mental well-being. During sleep, the body undergoes various processes that help repair and rejuvenate the body and mind. Sleep also plays a crucial role in memory consolidation, learning, and emotional regulation. Without sleep, the body and mind cannot function properly, leading to a range of negative consequences such as impaired cognitive function, mood disturbances, and increased risk of chronic diseases.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 85 tokens
+
+~~~text
+People need sleep because it is essential for their physical and mental well-being. During sleep, the body undergoes various processes that help repair and rejuvenate the body and mind. Sleep also plays a crucial role in memory consolidation, learning, and emotional regulation. Without sleep, the body and mind cannot function properly, leading to a range of negative consequences such as impaired cognitive function, mood disturbances, and increased risk of chronic diseases.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Sleep is essential for the body and mind to function optimally. During sleep, the body undergoes various restorative processes that are crucial for maintaining overall health and well-being. Here are some key reasons why sleep is vital:
+
+1. **Recovery and Repair**: While awake, the body is constantly repairing and rebuilding tissues, growing bones and muscles, and strengthening the immune system. Sleep is when the body carries out these vital functions.
+
+2. **Memory Consolidation**: During sleep, especially during deep sleep stages, the brain consolidates and organizes memories, helping to improve learning and cognitive functions.
+
+3. **Regulation of Hormones**: Sleep plays a significant role in regulating hormones that control appetite and metabolism. Lack of sleep can disrupt these hormones, leading to increased hunger and a higher risk of
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Sleep is essential for the body and mind to function optimally. During sleep, the body undergoes various processes that are crucial for health and well-being. Here are some key reasons why sleep is vital:
+
+1. **Recovery and Repair**: While awake, the body is constantly repairing and rebuilding tissues, growing bones and muscles, and strengthening the immune system. Sleep is the time when these processes are most active.
+
+2. **Memory Consolidation**: Sleep plays a significant role in memory consolidation, the process by which information from the day is organized and stored in the brain. This is particularly important for learning and retaining new information.
+
+3. **Cognitive Function**: Sleep is crucial for cognitive functions such as attention, concentration, and problem-solving. It helps in maintaining alertness and alertness during waking
+~~~
+
+### `t_cd_02` (code_and_sql)
+
+**Prompt:** Write a Python function called is_prime(n) that returns True if n is a prime number and False otherwise.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 51 tokens
+
+~~~text
+def is_prime(n):
+    if n <= 1:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 51 tokens
+
+~~~text
+def is_prime(n):
+    if n <= 1:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! Below is a Python function named `is_prime(n)` that checks whether a given number `n` is a prime number or not. A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself.
+
+```python
+def is_prime(n):
+    """
+    Check if the given number n is a prime number.
+
+    Parameters:
+    n (int): The number to check.
+
+    Returns:
+    bool: True if n is a prime number, False otherwise.
+    """
+    if n <= 1:
+        return False
+    if n <= 3:
+        return True
+    if n % 2 == 0 or n % 3 == 0:
+        return False
+    i = 5
+    while i
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! Below is a Python function named `is_prime(n)` that checks whether a given number `n` is a prime number or not. A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself.
+
+```python
+def is_prime(n):
+    """
+    Check if the given number n is a prime number.
+
+    Parameters:
+    n (int): The number to check.
+
+    Returns:
+    bool: True if n is a prime number, False otherwise.
+    """
+    if n <= 1:
+        return False
+    if n <= 3:
+        return True
+    if n % 2 == 0 or n % 3 == 0:
+        return False
+    i = 5
+    while i
+~~~
+
+### `t_cd_03` (code_and_sql)
+
+**Prompt:** Write a SQL query that returns the number of users who signed up in 2023 from a table users(id, signup_date).
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 37 tokens
+
+~~~text
+SELECT COUNT(*) FROM users WHERE signup_date >= '2023-01-01' AND signup_date < '2024-01-01';
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 37 tokens
+
+~~~text
+SELECT COUNT(*) FROM users WHERE signup_date >= '2023-01-01' AND signup_date < '2024-01-01';
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! To write a SQL query that returns the number of users who signed up in 2023 from a table named `users` with columns `id` and `signup_date`, you can use the following query:
+
+```sql
+SELECT COUNT(*) AS num_users_2023
+FROM users
+WHERE signup_date >= '2023-01-01' AND signup_date < '2024-01-01';
+```
+
+This query works as follows:
+- `COUNT(*)` counts the number of rows that match the criteria.
+- The `WHERE` clause filters the rows to include only those where the `signup_date` is in the year 2023.
+- `'2023-01-01
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! To write a SQL query that returns the number of users who signed up in 2023 from a table named `users` with columns `id` and `signup_date`, you can use the following query:
+
+```sql
+SELECT COUNT(*) AS num_users_2023
+FROM users
+WHERE signup_date >= '2023-01-01' AND signup_date < '2024-01-01';
+```
+
+This query works as follows:
+- `COUNT(*)` counts the number of rows that match the criteria.
+- The `WHERE` clause filters the rows to include only those where the `signup_date` is in the year 2023.
+- `'2023-01-01
+~~~
+
+### `t_cd_04` (code_and_sql)
+
+**Prompt:** Write a Python function called fibonacci(n) that returns the n-th Fibonacci number.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 52 tokens
+
+~~~text
+def fibonacci(n):
+    if n == 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fibonacci(n-1) + fibonacci(n-2)
+
+print(fibonacci(10))
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 52 tokens
+
+~~~text
+def fibonacci(n):
+    if n == 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fibonacci(n-1) + fibonacci(n-2)
+
+print(fibonacci(10))
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! Below is a Python function named `fibonacci(n)` that returns the n-th Fibonacci number. The function uses an iterative approach to efficiently compute the Fibonacci number, which is more efficient than the recursive approach for larger values of `n`.
+
+```python
+def fibonacci(n):
+    if n <= 0:
+        return "Input should be a positive integer."
+    elif n == 1:
+        return 0
+    elif n == 2:
+        return 1
+    
+    # Initialize the first two Fibonacci numbers
+    a, b = 0, 1
+    
+    # Compute the n-th Fibonacci number iteratively
+    for _ in range(2, n):
+        a, b = b, a + b
+    
+    return b
+
+# Example usage:
+print(fib
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! Below is a Python function named `fibonacci(n)` that returns the n-th Fibonacci number. The function uses an iterative approach to efficiently compute the Fibonacci number, which is more efficient than the recursive approach for larger values of `n`.
+
+```python
+def fibonacci(n):
+    if n <= 0:
+        return "Input should be a positive integer."
+    elif n == 1:
+        return 0
+    elif n == 2:
+        return 1
+    
+    # Initialize the first two Fibonacci numbers
+    a, b = 0, 1
+    
+    # Compute the n-th Fibonacci number iteratively
+    for _ in range(2, n):
+        a, b = b, a + b
+    
+    return b
+
+# Example usage:
+print(fib
+~~~
+
+### `t_cd_05` (code_and_sql)
+
+**Prompt:** Write a JavaScript function called sumArray that returns the sum of an array of numbers.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 68 tokens
+
+~~~text
+function sumArray(arr) {
+  let sum = 0;
+  for (let i = 0; i < arr.length; i++) {
+    sum += arr[i];
+  }
+  return sum;
+}
+
+console.log(sumArray([1, 2, 3, 4, 5])); // Output: 15
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 68 tokens
+
+~~~text
+function sumArray(arr) {
+  let sum = 0;
+  for (let i = 0; i < arr.length; i++) {
+    sum += arr[i];
+  }
+  return sum;
+}
+
+console.log(sumArray([1, 2, 3, 4, 5])); // Output: 15
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! Below is a JavaScript function named `sumArray` that takes an array of numbers as an argument and returns the sum of all the numbers in the array.
+
+```javascript
+function sumArray(numbers) {
+    return numbers.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
+}
+
+// Example usage:
+const numbers = [1, 2, 3, 4, 5];
+const result = sumArray(numbers);
+console.log(result); // Output will be 15
+```
+
+### Explanation:
+- The `reduce` method is used to iterate over each element in the array and accumulate the sum.
+- The first argument to `reduce` is a function that takes two parameters: `accumulator` (the accumulated value) and `currentValue` (the current element
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✘ · Fluency=✔ · stop=`max_tokens` · 160 tokens
+
+~~~text
+Certainly! Below is a JavaScript function named `sumArray` that takes an array of numbers as an argument and returns the sum of all the numbers in the array.
+
+```javascript
+function sumArray(numbers) {
+    return numbers.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
+}
+
+// Example usage:
+const numbers = [1, 2, 3, 4, 5];
+const result = sumArray(numbers);
+console.log(result); // Output will be 15
+```
+
+### Explanation:
+- The `reduce` method is used to iterate over each element in the array and accumulate the sum.
+- The first argument to `reduce` is a function that takes two parameters: `accumulator` (the accumulated value) and `currentValue` (the current element
+~~~
+
+### `t_fm_03` (format_constraints)
+
+**Prompt:** Give exactly 4 bullet points starting with "- " listing tips for learning a new language.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 138 tokens
+
+~~~text
+- Start with the basics: Begin by learning the alphabet, basic grammar rules, and common vocabulary words.
+- Practice regularly: Consistent practice is key to language learning. Set aside time each day to practice speaking, listening, reading, and writing in the new language.
+- Immerse yourself: Surround yourself with the language as much as possible. Listen to music, watch movies, and read books in the target language.
+- Use language learning apps: There are many language learning apps available that can help you practice speaking, listening, and reading in the new language.
+- Find a language exchange partner: Connect with someone who speaks the language you are learning and practice speaking with them regularly.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 138 tokens
+
+~~~text
+- Start with the basics: Begin by learning the alphabet, basic grammar rules, and common vocabulary words.
+- Practice regularly: Consistent practice is key to language learning. Set aside time each day to practice speaking, listening, reading, and writing in the new language.
+- Immerse yourself: Surround yourself with the language as much as possible. Listen to music, watch movies, and read books in the target language.
+- Use language learning apps: There are many language learning apps available that can help you practice speaking, listening, and reading in the new language.
+- Find a language exchange partner: Connect with someone who speaks the language you are learning and practice speaking with them regularly.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 102 tokens
+
+~~~text
+- Start with the basics: Focus on learning the alphabet, common phrases, and basic grammar to build a strong foundation.
+- Practice regularly: Consistent practice, even if it's just a few minutes a day, can significantly improve language skills.
+- Immerse yourself: Listen to music, watch movies, or use language learning apps to expose yourself to the language in context.
+- Engage with native speakers: Find opportunities to speak with native speakers or join language exchange programs to practice speaking and listening skills.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 102 tokens
+
+~~~text
+- Start with the basics: Focus on learning the alphabet, common phrases, and basic grammar to build a strong foundation.
+- Practice regularly: Consistent practice, even if it's just a few minutes a day, can significantly improve language skills.
+- Immerse yourself: Listen to music, watch movies, or use language learning apps to expose yourself to the language in context.
+- Engage with native speakers: Find opportunities to speak with native speakers or join language exchange programs to practice speaking and listening skills.
+~~~
+
+### `t_fm_05` (format_constraints)
+
+**Prompt:** Describe the moon in exactly two sentences.
+
+**`10_engine_v2_1`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 135 tokens
+
+~~~text
+The moon is a natural satellite of Earth, orbiting around it at an average distance of about 384,400 kilometers. It is the fifth largest moon in the solar system and has a diameter of approximately 3,474 kilometers. The moon's surface is primarily composed of basaltic rock and is covered by a thin layer of dust and regolith. It has no atmosphere, which means that it is exposed to the harsh conditions of space, such as solar radiation and meteorite impacts. The moon's gravitational pull causes tides on Earth, and it has played a significant role in human history, from ancient mythology to modern space exploration.
+~~~
+
+**`11_engine_v2_2_lean`** — Turn=✔ · Constraint=✘ · Stop=✔ · Fluency=✔ · stop=`eos` · 135 tokens
+
+~~~text
+The moon is a natural satellite of Earth, orbiting around it at an average distance of about 384,400 kilometers. It is the fifth largest moon in the solar system and has a diameter of approximately 3,474 kilometers. The moon's surface is primarily composed of basaltic rock and is covered by a thin layer of dust and regolith. It has no atmosphere, which means that it is exposed to the harsh conditions of space, such as solar radiation and meteorite impacts. The moon's gravitational pull causes tides on Earth, and it has played a significant role in human history, from ancient mythology to modern space exploration.
+~~~
+
+**`12_official_instruct_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 53 tokens
+
+~~~text
+The Moon is Earth's only natural satellite, orbiting our planet approximately every 27.3 days. It is a rocky, airless body with a predominantly dark and light surface, featuring craters, mountains, and vast plains of basaltic lava.
+~~~
+
+**`13_instruct_plus_orth_ban_chat`** — Turn=✔ · Constraint=✔ · Stop=✔ · Fluency=✔ · stop=`eos` · 53 tokens
+
+~~~text
+The Moon is Earth's only natural satellite, orbiting our planet approximately every 27.3 days. It is a rocky, airless body with a predominantly dark and light surface, featuring craters, mountains, and vast plains of basaltic lava.
+~~~
+
 ## Appendix: other runs
 
 ### `Qwen/Qwen2.5-1.5B` — `results/Qwen__Qwen2.5-1.5B/test40` (40 prompts from `test_prompts.json`, calibration 77/80 prompts, 2 pinned heads: L9H8 (+0.004), L8H6 (+0.002))
@@ -1134,6 +2038,7 @@ The answer is 36.
 | `x7_v2_1_minus_drift_stop` | 100.0 | 67.5 | 87.5 | 90.0 | **86.2** | 72.5 | 0 | 27.2 | 36.7 | 77 |
 | `x8_v2_1_minus_sibling_orth` | 100.0 | 65.0 | 75.0 | 77.5 | **79.4** | 57.5 | 0 | 26.1 | 38.4 | 88 |
 | `x9_v2_1_minus_anti_echo` | 100.0 | 70.0 | 85.0 | 90.0 | **86.2** | 70.0 | 0 | 26.9 | 37.2 | 77 |
+| `11_engine_v2_2_lean` | 100.0 | 70.0 | 85.0 | 90.0 | **86.2** | 70.0 | 0 | 26.3 | 38.1 | 77 |
 
 #### Per-category Composite (%)
 
@@ -1158,6 +2063,7 @@ The answer is 36.
 | `x7_v2_1_minus_drift_stop` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
 | `x8_v2_1_minus_sibling_orth` | 93.8 | 84.4 | 56.2 | 71.9 | 90.6 |
 | `x9_v2_1_minus_anti_echo` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
+| `11_engine_v2_2_lean` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
 
 #### Per-category ConstraintScore (%)
 
@@ -1182,6 +2088,7 @@ The answer is 36.
 | `x7_v2_1_minus_drift_stop` | 100.0 | 37.5 | 75.0 | 50.0 | 75.0 |
 | `x8_v2_1_minus_sibling_orth` | 100.0 | 37.5 | 62.5 | 50.0 | 75.0 |
 | `x9_v2_1_minus_anti_echo` | 100.0 | 37.5 | 87.5 | 50.0 | 75.0 |
+| `11_engine_v2_2_lean` | 100.0 | 37.5 | 87.5 | 50.0 | 75.0 |
 
 #### Module contributions
 
@@ -1238,3 +2145,81 @@ Conditions 8 and 9 build on `7_engine_v2_hinge_erase`, the better of x5 / 7 on t
 - **reasoning_math Composite**: `6_full_assistant_engine` 71.9% → `7_engine_v2_hinge_erase` 68.8% → `9_engine_v2_full` 68.8% → `10_engine_v2_1` 71.9%.
 - **negative_constraints ConstraintScore**: `6_full_assistant_engine` 25.0% → `7_engine_v2_hinge_erase` 25.0% → `9_engine_v2_full` 87.5% → `10_engine_v2_1` 75.0%.
 - **Mechanism activity on these prompts (condition 10):** EOS boosts by reason centroid 21, drift 12, newturn 6; boundary-window steps 432; unembedding projections 889 (sibling fallbacks 0); prompts with an anti-echo set 8.
+
+### Phase 4 (v2.2 lean engine, post-trained reference) comparisons
+
+- **v2.2 lean vs. `1_raw_base`** (`1_raw_base` → `11_engine_v2_2_lean`): Composite **+10.6** [+3.1, +18.1] (TurnCross +0.0, Constraint +15.0, CleanStop +30.0, Fluency -2.5, NaturalEOS -7.5).
+- **v2.2 lean vs. `3_urial_3shot_prefix`** (`3_urial_3shot_prefix` → `11_engine_v2_2_lean`): Composite **+5.6** [-3.8, +14.4] (TurnCross +0.0, Constraint +10.0, CleanStop +22.5, Fluency -10.0, NaturalEOS +30.0).
+- **v2.2 lean vs. `10_engine_v2_1`** (`10_engine_v2_1` → `11_engine_v2_2_lean`): Composite **+0.0** [-3.8, +3.8] (TurnCross +0.0, Constraint +2.5, CleanStop -2.5, Fluency +0.0, NaturalEOS -2.5).
+- **v2.2 lean vs. `x9_v2_1_minus_anti_echo`** (`x9_v2_1_minus_anti_echo` → `11_engine_v2_2_lean`): Composite **+0.0** [+0.0, +0.0] (TurnCross +0.0, Constraint +0.0, CleanStop +0.0, Fluency +0.0, NaturalEOS +0.0).
+- **Byte identity with `x9`:** 39/40 responses identical. 10 x9 prompts had a drift-stop EOS boost (the mechanism condition 11 drops); the 1 differing prompts are `t_cd_01`, of which 1 had such a boost.
+- **Post-training's own gain (chat frame)** (`1_raw_base` → `12_official_instruct_chat`): Composite **+8.8** [+2.5, +15.0] (TurnCross +0.0, Constraint +7.5, CleanStop +20.0, Fluency +7.5, NaturalEOS -12.5).
+- **Post-training's own gain (bare frame)** (`1_raw_base` → `12_official_instruct_bare`): Composite **-4.4** [-12.5, +4.4] (TurnCross +0.0, Constraint +7.5, CleanStop -17.5, Fluency -7.5, NaturalEOS -52.5).
+
+**Engine vs. post-training** (Composite points, 95% paired-bootstrap CIs; recovery = (C_engine − C_raw) / (C_Instruct − C_raw), reported only when its denominator is resolved):
+
+| Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |
+|---|---|---|---|---|---|
+| protocol, raw = `1_raw_base` | `10_engine_v2_1` | `12_official_instruct_chat` | +8.8 [+2.5, +15.0] | +1.9 [-6.9, +10.6] | **121%** [33%, 357%] |
+| protocol, raw = `1_raw_base` | `10_engine_v2_1` | `12_official_instruct_bare` | -4.4 [-12.5, +4.4] | +15.0 [+5.6, +23.8] | undefined (Instruct ≤ raw base) |
+| protocol, raw = `1_raw_base` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +8.8 [+2.5, +15.0] | +1.9 [-6.2, +10.0] | **121%** [38%, 360%] |
+| protocol, raw = `1_raw_base` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -4.4 [-12.5, +4.4] | +15.0 [+5.6, +24.4] | undefined (Instruct ≤ raw base) |
+| protocol, raw = `2_raw_base_plus_stops` | `10_engine_v2_1` | `12_official_instruct_chat` | +3.8 [-2.5, +10.0] | +1.9 [-6.9, +10.6] | not resolved (point 150%; denominator ≤ 0 in 15% of resamples) |
+| protocol, raw = `2_raw_base_plus_stops` | `10_engine_v2_1` | `12_official_instruct_bare` | -9.4 [-17.5, -1.2] | +15.0 [+5.6, +23.8] | undefined (Instruct ≤ raw base) |
+| protocol, raw = `2_raw_base_plus_stops` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +3.8 [-2.5, +10.0] | +1.9 [-6.2, +10.0] | not resolved (point 150%; denominator ≤ 0 in 15% of resamples) |
+| protocol, raw = `2_raw_base_plus_stops` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -9.4 [-17.5, -1.2] | +15.0 [+5.6, +24.4] | undefined (Instruct ≤ raw base) |
+
+- **Sibling-orthogonal ban on Instruct (chat frame)** (`12_official_instruct_chat` → `13_instruct_plus_orth_ban_chat`): Composite **+0.6** [-4.4, +4.4] (TurnCross +0.0, Constraint +7.5, CleanStop -2.5, Fluency -2.5, NaturalEOS -2.5).
+  - negative_constraints ConstraintScore 37.5% → 75.0%; responses changed on 8 prompts (`t_ng_01`, `t_ng_02`, `t_ng_03`, `t_ng_04`, `t_ng_05`, `t_ng_06`, `t_ng_07`, `t_ng_08`).
+- **Sibling-orthogonal ban on Instruct (bare frame)** (`12_official_instruct_bare` → `13_instruct_plus_orth_ban_bare`): Composite **+4.4** [+0.0, +10.0] (TurnCross +0.0, Constraint +15.0, CleanStop +0.0, Fluency +2.5, NaturalEOS +0.0).
+  - negative_constraints ConstraintScore 12.5% → 87.5%; responses changed on 8 prompts (`t_ng_01`, `t_ng_02`, `t_ng_03`, `t_ng_04`, `t_ng_05`, `t_ng_06`, `t_ng_07`, `t_ng_08`).
+
+**Same-session decode speed** (`Qwen/Qwen2.5-1.5B`, 40 test prompts, conditions interleaved prompt by prompt, `scripts/bench_speed.py`):
+
+| Condition | tok/s | tok/s, negation prompts | tok/s, other prompts | ms/token | identical to log |
+|---|---|---|---|---|---|
+| `2_raw_base_plus_stops` | 40.78 | 41.08 | 40.69 | 24.5 | 40/40 |
+| `7_engine_v2_hinge_erase` | 39.82 | 39.84 | 39.81 | 25.1 | 40/40 |
+| `10_engine_v2_1` | 37.29 | 30.15 | 39.23 | 26.8 | 40/40 |
+| `x9_v2_1_minus_anti_echo` | 37.46 | 30.99 | 39.17 | 26.7 | 40/40 |
+| `11_engine_v2_2_lean` | 39.02 | 35.66 | 39.81 | 25.6 | 40/40 |
+
+#### Unit economics
+
+| Approach | Weights changed | Artifact / weight delta | One-off cost | Extra context tokens | Clean-token KL, held-out: all / no-negation prompts (nats) | Composite, 160 tokens | Composite, 512 tokens | tok/s |
+|---|---|---|---|---|---|---|---|---|
+| Raw base (`1_raw_base`) | 0 | – | none | 0 | 0 (reference) | **75.6** | 73.8 | 39.4 |
+| URIAL 3-shot prefix (`3_urial_3shot_prefix`) | 0 | 768-token prompt | none | 768 | 0.098 / 0.117 | **80.6** | – | 33.1 |
+| Static CAA (`4_static_caa`) | 0 | 2.3 MB (same artifact) | not recorded for this model | 0 | 0.108 / 0.104 | **75.6** | – | 40.1 |
+| **Engine v2.1** (`10_engine_v2_1`) | 0 | 2.3 MB | not recorded for this model | 0 | 0.230 / 0.024 | **86.2** | 87.5 | 37.3 |
+| **Engine v2.2 lean** (test-informed) (`11_engine_v2_2_lean`) | 0 | 2.3 MB | not recorded for this model | 0 | 0.226 / 0.023 | **86.2** | 86.9 | 39.0 |
+| Official Instruct, chat template (`12_official_instruct_chat`) | 86.7% of 1.54B | 3.09 GB (whole checkpoint) | SFT on > 1M examples + multi-stage RL; compute not disclosed | 25 | 0.232 / 0.213 | **84.4** | 90.0 | 39.6 |
+| Official Instruct, bare frame (`12_official_instruct_bare`) | 86.7% of 1.54B | 3.09 GB (whole checkpoint) | SFT on > 1M examples + multi-stage RL; compute not disclosed | 0 | 0.102 / 0.080 | **71.2** | 63.8 | 40.0 |
+| Instruct + sibling-orth ban, chat (`13_instruct_plus_orth_ban_chat`) | 86.7% of 1.54B | 3.09 GB (whole checkpoint) + 0 | SFT on > 1M examples + multi-stage RL; compute not disclosed | 25 | – | **85.0** | 91.9 | 38.4 |
+
+#### Sensitivity of the post-training comparison
+
+| Condition | Composite, protocol: eager attention, 160 tokens | Composite, SDPA attention, 160 tokens | Composite, eager attention, 512 tokens | hit token cap, eager attention, 160 tokens | hit token cap, SDPA attention, 160 tokens | hit token cap, eager attention, 512 tokens |
+|---|---|---|---|---|---|---|
+| `1_raw_base` | 75.6 | 81.2 | 73.8 | 9/40 | 10/40 | 7/40 |
+| `2_raw_base_plus_stops` | 80.6 | 83.8 | – | 4/40 | 7/40 | – |
+| `10_engine_v2_1` | 86.2 | – | 87.5 | 5/40 | – | 3/40 |
+| `11_engine_v2_2_lean` | 86.2 | – | 86.9 | 6/40 | – | 4/40 |
+| `12_official_instruct_chat` | 84.4 | 84.4 | 90.0 | 14/40 | 16/40 | 1/40 |
+| `12_official_instruct_bare` | 71.2 | 78.1 | 63.8 | 26/40 | 23/40 | 21/40 |
+| `13_instruct_plus_orth_ban_chat` | 85.0 | 86.9 | 91.9 | 15/40 | 16/40 | 1/40 |
+
+| Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |
+|---|---|---|---|---|---|
+| protocol: eager attention, 160 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +8.8 [+2.5, +15.0] | +1.9 [-6.9, +10.6] | **121%** [33%, 357%] |
+| protocol: eager attention, 160 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | -4.4 [-12.5, +4.4] | +15.0 [+5.6, +23.8] | undefined (Instruct ≤ raw base) |
+| protocol: eager attention, 160 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +8.8 [+2.5, +15.0] | +1.9 [-6.2, +10.0] | **121%** [38%, 360%] |
+| protocol: eager attention, 160 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -4.4 [-12.5, +4.4] | +15.0 [+5.6, +24.4] | undefined (Instruct ≤ raw base) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `10_engine_v2_1` | `12_official_instruct_chat` | +3.1 [-3.1, +9.4] | +1.9 [-6.2, +10.0] | not resolved (point 160%; denominator ≤ 0 in 20% of resamples) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `10_engine_v2_1` | `12_official_instruct_bare` | -3.1 [-10.0, +3.8] | +8.1 [+0.0, +16.2] | undefined (Instruct ≤ raw base) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +3.1 [-3.1, +9.4] | +1.9 [-6.2, +10.0] | not resolved (point 160%; denominator ≤ 0 in 20% of resamples) |
+| SDPA attention, 160 tokens (engine on the protocol stack) | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -3.1 [-10.0, +3.8] | +8.1 [+0.0, +16.2] | undefined (Instruct ≤ raw base) |
+| eager attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +16.2 [+9.4, +23.1] | -2.5 [-10.0, +4.4] | **85%** [40%, 135%] |
+| eager attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | -10.0 [-20.0, +0.0] | +23.8 [+13.1, +34.4] | undefined (Instruct ≤ raw base) |
+| eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +16.2 [+9.4, +23.1] | -3.1 [-10.0, +3.1] | **81%** [40%, 125%] |
+| eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | -10.0 [-20.0, +0.0] | +23.1 [+11.9, +34.4] | undefined (Instruct ≤ raw base) |

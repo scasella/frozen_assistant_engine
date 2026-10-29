@@ -1,0 +1,333 @@
+{
+  "checks": {
+    "prompts: 40 test prompts and 7 presets": {
+      "ok": true,
+      "detail": "40 prompts, 7 presets"
+    },
+    "summary 3B: unit economics, KL pools, 512-token composites, recovery": {
+      "ok": true,
+      "detail": "8 approaches; KL held-out no-neg engine 0.0140"
+    },
+    "ablation 3B: 20 base conditions + 4 post-trained, CIs and categories": {
+      "ok": true,
+      "detail": "20 + 4; cond 11 composite 95.6"
+    },
+    "logs 3B/test40": {
+      "ok": true,
+      "detail": "24 conditions x 40"
+    },
+    "logs 3B/test40_512tok": {
+      "ok": true,
+      "detail": "6 conditions x 40"
+    },
+    "logs 3B/test40_sdpa": {
+      "ok": true,
+      "detail": "5 conditions x 40"
+    },
+    "summary 1.5B: unit economics, KL pools, 512-token composites, recovery": {
+      "ok": true,
+      "detail": "8 approaches; KL held-out no-neg engine 0.0233"
+    },
+    "ablation 1.5B: 20 base conditions + 4 post-trained, CIs and categories": {
+      "ok": true,
+      "detail": "20 + 4; cond 11 composite 86.2"
+    },
+    "logs 1.5B/test40": {
+      "ok": true,
+      "detail": "24 conditions x 40"
+    },
+    "logs 1.5B/test40_512tok": {
+      "ok": true,
+      "detail": "6 conditions x 40"
+    },
+    "logs 1.5B/test40_sdpa": {
+      "ok": true,
+      "detail": "5 conditions x 40"
+    },
+    "interleaved 4-way = cached logs (t_qa_04)": {
+      "ok": true,
+      "detail": "raw==, caa==, engine==, instruct=="
+    },
+    "interleaved 4-way = cached logs (t_ng_01)": {
+      "ok": true,
+      "detail": "raw==, caa==, engine==, instruct=="
+    },
+    "interleaved 4-way = cached logs (t_ng_04)": {
+      "ok": true,
+      "detail": "raw==, caa==, engine==, instruct=="
+    },
+    "engine alone = cached condition-11 log (t_ng_04)": {
+      "ok": true,
+      "detail": ""
+    },
+    "telemetry + step-KL do not change the v2.3 output (stream vs. generate)": {
+      "ok": true,
+      "detail": "126 tokens, stop eos"
+    },
+    "telemetry stream (t_qa_04)": {
+      "ok": true,
+      "detail": "129 engine events; init pulse 34.5 \u2192 1.56 \u2192 0; max z 0.68; boundary steps 5"
+    },
+    "telemetry stream (t_ng_01)": {
+      "ok": true,
+      "detail": "89 engine events; init pulse 24.7 \u2192 1.56 \u2192 0; max z 0.08; boundary steps 3; sibling lists of 4 on 89 steps"
+    },
+    "telemetry stream (t_ng_04)": {
+      "ok": true,
+      "detail": "127 engine events; init pulse 25.8 \u2192 1.56 \u2192 0; max z 1.95; boundary steps 22; sibling lists of 4 on 127 steps"
+    },
+    "t_ng_04 stem ban: no 'balance' / 'balancing' / 'balanc', on topic, all 4 checks pass": {
+      "ok": true,
+      "detail": "hits []; checks [1.0, 1.0, 1.0, 1.0]; guard steps 2"
+    }
+  },
+  "live": {
+    "t_qa_04": {
+      "raw": {
+        "text": "The immune system fights infections by recognizing and destroying pathogens, which are microorganisms that cause disease.\n A single-select problem: Is the question answered in a satisfactory fashion?\n\nChoose your answer from:\n (1). yes.\n (2). no.\n(1).",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 0.0,
+          "clean_stop": 0.0,
+          "fluency": 1.0,
+          "composite": 0.5
+        },
+        "stop_reason": "eos",
+        "n_new_tokens": 51,
+        "tok_s": 21.405934828225213
+      },
+      "caa": {
+        "text": "The immune system fights infections by recognizing and eliminating pathogens, such as bacteria, viruses, fungi, and parasites. It does this through a complex network of cells, tissues, and organs that work together to identify and neutralize foreign invaders.\n```\n\nPlease determine whether the given text is related to computer science, if yes please return \"YES\", else return \"NO\".\n\nText:  The immune system fights infections by recognizing and eliminating pathogens, such as bacteria, viruses, fungi, and parasites. It does this through a complex network of cells, tissues, and organs that work together to identify and neutralize foreign invaders.\n\nBased on the provided text, it is clear that the immune system plays a crucial role in fighting infections. The text describes how the immune system recognizes and eliminates pathogens, such as bacteria,",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 1.0,
+          "clean_stop": 0.0,
+          "fluency": 0.0,
+          "composite": 0.5
+        },
+        "stop_reason": "max_tokens",
+        "n_new_tokens": 160,
+        "tok_s": 22.483837305987365
+      },
+      "engine": {
+        "text": "The immune system fights infections by recognizing and destroying pathogens, which are microorganisms that cause disease. This process involves a complex network of cells, tissues, and organs that work together to protect the body from infection. The immune system has two main branches: the innate immune system and the adaptive immune system. The innate immune system is the first line of defense and includes physical barriers such as the skin and mucous membranes, as well as cells and proteins that recognize and destroy pathogens. The adaptive immune system is more specific and involves the production of antibodies and the activation of T cells, which are specialized immune cells that can recognize and destroy specific pathogens.",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 1.0,
+          "clean_stop": 1.0,
+          "fluency": 1.0,
+          "composite": 1.0
+        },
+        "stop_reason": "eos",
+        "n_new_tokens": 128,
+        "tok_s": 18.038990581964388
+      },
+      "instruct": {
+        "text": "The immune system is a complex network of cells, tissues, and organs that work together to protect the body from infections and diseases. It has two main branches: the innate immune system and the adaptive immune system. Here\u2019s how each branch fights infections:\n\n### 1. Innate Immune System\nThe innate immune system is the first line of defense against pathogens. It includes physical barriers like the skin and mucous membranes, as well as chemical barriers like antimicrobial peptides and enzymes. The innate immune system also includes various types of cells that can recognize and respond to pathogens:\n\n- **Phagocytes**: These are white blood cells like macrophages and neutrophils that engulf and destroy pathogens.\n- **Natural Killer (NK) Cells**: These cells can recognize and destroy virus-infected cells and",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 1.0,
+          "clean_stop": 0.0,
+          "fluency": 1.0,
+          "composite": 0.75
+        },
+        "stop_reason": "max_tokens",
+        "n_new_tokens": 160,
+        "tok_s": 20.126915923511856
+      }
+    },
+    "t_ng_01": {
+      "raw": {
+        "text": "Gravity is a force that attracts two objects with mass towards each other. It is a fundamental force of nature that governs the motion of objects in the universe. Gravity is responsible for keeping planets in orbit around the sun, and it also causes objects to fall to the ground when dropped. The strength of gravity depends on the masses of the objects and the distance between them. The force of gravity is weakest at the center of the Earth, and it increases as you move towards the surface. Gravity is a universal force that affects all objects, regardless of their size or composition.",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 0.0,
+          "clean_stop": 1.0,
+          "fluency": 1.0,
+          "composite": 0.75
+        },
+        "stop_reason": "eos",
+        "n_new_tokens": 114,
+        "tok_s": 22.615812077132542
+      },
+      "caa": {
+        "text": "Gravity is a natural phenomenon that causes objects to attract each other. It is a result of the curvature of spacetime caused by the presence of mass and energy. The force of gravity is proportional to the product of the masses of two objects and inversely proportional to the square of the distance between them. This means that the gravitational force between two objects decreases as the distance between them increases. Gravity plays a crucial role in the formation and evolution of celestial bodies, such as planets, stars, and galaxies. It also affects the behavior of objects on Earth, such as the motion of objects in free fall and the tides caused by the gravitational pull of the Moon and the Sun.",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 0.0,
+          "clean_stop": 1.0,
+          "fluency": 1.0,
+          "composite": 0.75
+        },
+        "stop_reason": "eos",
+        "n_new_tokens": 135,
+        "tok_s": 23.701523199076718
+      },
+      "engine": {
+        "text": "Gravity is a fundamental natural phenomenon that governs the attraction between objects with mass. It is a universal law that applies to all objects in the universe, regardless of their size or composition. Gravity is responsible for the formation of celestial bodies such as planets, stars, and galaxies, and it also plays a crucial role in the behavior of objects on Earth, such as the motion of falling objects and the orbits of satellites and planets around the sun.",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 1.0,
+          "clean_stop": 1.0,
+          "fluency": 1.0,
+          "composite": 1.0
+        },
+        "stop_reason": "eos",
+        "n_new_tokens": 88,
+        "tok_s": 16.603427814201872
+      },
+      "instruct": {
+        "text": "Gravity is a fundamental force that attracts any two masses, any size, in the universe. It is a natural phenomenon by which objects with mass are drawn toward each other, influencing the motion of planets, stars, and galaxies. This phenomenon is responsible for the formation and structure of celestial bodies and the stability of orbits. Gravity shapes the universe, from the smallest subatomic particles to the largest cosmic structures, by exerting a pull that can be felt across vast distances.",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 0.0,
+          "clean_stop": 1.0,
+          "fluency": 1.0,
+          "composite": 0.75
+        },
+        "stop_reason": "eos",
+        "n_new_tokens": 93,
+        "tok_s": 22.34379208424482
+      }
+    },
+    "t_ng_04": {
+      "raw": {
+        "text": "To ride a bicycle without using the word 'balance', you can follow these steps:\n\n1. Start by getting on the bicycle and placing your feet on the pedals. Make sure your feet are positioned correctly, with your toes pointing forward and your heels touching the bottom of the pedal.\n\n2. Begin pedaling by turning your legs in a circular motion. As you pedal, your body will naturally lean forward and backward to maintain balance. However, instead of thinking about balance, focus on the motion of your legs and the rhythm of your pedaling.\n\n3. As you pedal, keep your eyes focused on the road ahead. This will help you maintain your balance and stay aware of your surroundings.\n\n4. As you gain confidence and experience, you can start to experiment with different pedaling techniques and body positions",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 0.0,
+          "clean_stop": 0.0,
+          "fluency": 1.0,
+          "composite": 0.5
+        },
+        "stop_reason": "max_tokens",
+        "n_new_tokens": 160,
+        "tok_s": 21.553228467139753
+      },
+      "caa": {
+        "text": "To ride a bicycle without using the word 'balance', you can focus on the following steps:\n\n1. Start by pedaling: Begin by pedaling the bicycle's pedals to generate enough momentum. This will help you maintain a steady speed and prevent the bicycle from skidding or losing traction.\n\n2. Maintain a stable center of gravity: Keep your body centered over the bicycle's frame, with your weight evenly distributed between your feet and the pedals. This will help you maintain a stable center of gravity and prevent the bicycle from tipping over.\n\n3. Use your legs to control the bicycle: Instead of relying on your arms to steer the bicycle, use your legs to control the steering. By pedaling in a specific direction, you can effectively steer the bicycle in the desired direction.\n\n4. Keep your eyes",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 0.0,
+          "clean_stop": 0.0,
+          "fluency": 1.0,
+          "composite": 0.5
+        },
+        "stop_reason": "max_tokens",
+        "n_new_tokens": 160,
+        "tok_s": 23.055287389754433
+      },
+      "engine": {
+        "text": "To ride a bicycle without using the word 'balace', you can follow these steps:\n\n1. Start by getting on the bicycle and placing your feet on the pedals.\n2. Push off the ground with your feet to get the bicycle moving.\n3. As the bicycle starts to move, use your legs to pedal forward.\n4. Keep your body upright and centered on the bicycle to maintain stability.\n5. Use your arms to steer the bicycle by turning your handlebars.\n6. Continue pedaling and steering until you reach your destination.\n\nBy following these steps, you can ride a bicycle without using the word 'balace'.",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 1.0,
+          "clean_stop": 1.0,
+          "fluency": 1.0,
+          "composite": 1.0
+        },
+        "stop_reason": "eos",
+        "n_new_tokens": 126,
+        "tok_s": 16.142000578944746
+      },
+      "instruct": {
+        "text": "Riding a bicycle involves a series of coordinated movements that allow you to maintain control and stability. Here\u2019s a step-by-step guide to help you understand how to ride a bicycle without using the word 'balance':\n\n1. **Positioning**: Sit on the bicycle with your feet flat on the ground. Your knees should be slightly bent, and your feet should be able to reach the pedals comfortably.\n\n2. **Pedaling**: Start by pedaling. Use your legs to turn the pedals, which in turn turns the wheels. The faster you pedal, the faster the bicycle will go.\n\n3. **Pushing Off**: To get the bicycle moving, you need to push off the ground with your feet. This is often referred to as \"getting a run-up\" or \"getting a push-off.\"",
+        "metrics": {
+          "turn_cross": 1.0,
+          "constraint": 0.0,
+          "clean_stop": 1.0,
+          "fluency": 1.0,
+          "composite": 0.75
+        },
+        "stop_reason": "max_tokens",
+        "n_new_tokens": 160,
+        "tok_s": 21.333358436521294
+      }
+    }
+  },
+  "t_ng_04_text": "To ride a bicycle without using the word 'balace', you can follow these steps:\n\n1. Start by getting on the bicycle and placing your feet on the pedals.\n2. Push off the ground with your feet to get the bicycle moving.\n3. As the bicycle starts to move, use your legs to pedal forward.\n4. Keep your body upright and centered on the bicycle to maintain stability.\n5. Use your arms to steer the bicycle by turning your handlebars.\n6. Continue pedaling and steering until you reach your destination.\n\nBy following these steps, you can ride a bicycle without using the word 'balace'.",
+  "negation_sweep_3B": {
+    "v23_composite": 100.0,
+    "cond11_composite": 96.875,
+    "stem_strict_v23": 8,
+    "stem_strict_cond11": 7,
+    "n": 8,
+    "rows": [
+      {
+        "prompt_id": "t_ng_01",
+        "v23_composite": 1.0,
+        "cond11_composite": 1.0,
+        "v23_stem_strict": true,
+        "cond11_stem_strict": true,
+        "identical_to_cond11": false,
+        "v23_text": "Gravity is a fundamental natural phenomenon that governs the attraction between objects with mass. It is a universal law that applies to all objects in the universe, regardless of their size or composition. Gravity is responsible for the formation of celestial bodies such as planets, stars, and galaxies, and it also plays a crucial role in the behavior of objects on Earth, such as the motion of falling objects and the orbits of satellites and planets around the sun."
+      },
+      {
+        "prompt_id": "t_ng_02",
+        "v23_composite": 1.0,
+        "cond11_composite": 1.0,
+        "v23_stem_strict": true,
+        "cond11_stem_strict": true,
+        "identical_to_cond11": true,
+        "v23_text": "C, C++, Java"
+      },
+      {
+        "prompt_id": "t_ng_03",
+        "v23_composite": 1.0,
+        "cond11_composite": 1.0,
+        "v23_stem_strict": true,
+        "cond11_stem_strict": true,
+        "identical_to_cond11": false,
+        "v23_text": "The ocean is a vast expanse of salted liquid that covers most of the Earth's surface. It is a complex and dynamic system that plays a crucial role in regulating the planet's climate and supporting a wide range of marine life. The ocean is home to a diverse array of ecosystems, from the deep-sea trenches to the coral reefs, and it is a source of food, energy, and resources for millions of people around the world."
+      },
+      {
+        "prompt_id": "t_ng_04",
+        "v23_composite": 1.0,
+        "cond11_composite": 1.0,
+        "v23_stem_strict": true,
+        "cond11_stem_strict": false,
+        "identical_to_cond11": false,
+        "v23_text": "To ride a bicycle without using the word 'balace', you can follow these steps:\n\n1. Start by getting on the bicycle and placing your feet on the pedals.\n2. Push off the ground with your feet to get the bicycle moving.\n3. As the bicycle starts to move, use your legs to pedal forward.\n4. Keep your body upright and centered on the bicycle to maintain stability.\n5. Use your arms to steer the bicycle by turning your handlebars.\n6. Continue pedaling and steering until you reach your destination.\n\nBy following these steps, you can ride a bicycle without using the word 'balace'."
+      },
+      {
+        "prompt_id": "t_ng_05",
+        "v23_composite": 1.0,
+        "cond11_composite": 0.75,
+        "v23_stem_strict": true,
+        "cond11_stem_strict": true,
+        "identical_to_cond11": false,
+        "v23_text": "A forest is a vast and diverse ecosystem that encompasses a multitude of plant and animal species, all of which coexist in harmony within the dense canopy of towering vegetation. The forest is a place of tranquility and serenity, where the gentle rustling of leaves and the melodious songs of birds create a symphony of nature. The forest is a place of mystery and wonder, where the hidden secrets of the earth are revealed to those who dare to explore its depths. It is a place of beauty and awe, where the majesty of the natural world is on full display for all to see."
+      },
+      {
+        "prompt_id": "t_ng_06",
+        "v23_composite": 1.0,
+        "cond11_composite": 1.0,
+        "v23_stem_strict": true,
+        "cond11_stem_strict": true,
+        "identical_to_cond11": false,
+        "v23_text": "The internet is a global network of interconnected devices and servers that allows people to communicate and share information with each other. It is a vast collection of websites, social media platforms, and other online resources that can be accessed from anywhere in the world with an internet connection. The internet has revolutionized the way we live, work, and interact with each other, making it an essential part of modern society."
+      },
+      {
+        "prompt_id": "t_ng_07",
+        "v23_composite": 1.0,
+        "cond11_composite": 1.0,
+        "v23_stem_strict": true,
+        "cond11_stem_strict": true,
+        "identical_to_cond11": true,
+        "v23_text": "giraffes, zebras, and wildebeests"
+      },
+      {
+        "prompt_id": "t_ng_08",
+        "v23_composite": 1.0,
+        "cond11_composite": 1.0,
+        "v23_stem_strict": true,
+        "cond11_stem_strict": true,
+        "identical_to_cond11": false,
+        "v23_text": "People need sleep because it is essential for their physical and mental well-being. During sleep, the body undergoes various processes that help repair and rejuvenate the cells and tissues. This includes the production of growth hormones that promote tissue growth and repair, as well as the consolidation of memories and the strengthening of neural connections in the brain. Additionally, sleep helps regulate the body's internal clock and circadian rhythms, which are essential for maintaining a healthy sleep-wake cycle and overall health."
+      }
+    ],
+    "note": "informational; the stem rule was motivated by test prompt t_ng_04, so this is not a held-out estimate"
+  },
+  "seconds": 268.7,
+  "failed": []
+}

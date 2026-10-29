@@ -1446,6 +1446,24 @@
         "stop_string": 5,
         "max_tokens": 2
       }
+    },
+    "11_engine_v2_2_lean": {
+      "turn_cross": 100.0,
+      "constraint": 92.5,
+      "clean_stop": 92.5,
+      "fluency": 97.5,
+      "composite": 95.625,
+      "natural_eos": 82.5,
+      "n": 40,
+      "ms_per_token": 43.897429531046846,
+      "tok_per_s": 22.780377135584693,
+      "avg_new_tokens": 71.1,
+      "extra_prompt_tokens": 0.0,
+      "stop_reasons": {
+        "eos": 33,
+        "stop_string": 5,
+        "max_tokens": 2
+      }
     }
   }
 }

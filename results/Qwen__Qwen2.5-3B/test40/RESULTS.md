@@ -34,8 +34,9 @@ No weights were modified and no gradients were computed: every condition runs th
 | `x7_v2_1_minus_drift_stop` | 100.0 | 87.5 | 92.5 | 97.5 | **94.4** | 80.0 | 0 | 44.3 | 22.6 | 72 |
 | `x8_v2_1_minus_sibling_orth` | 100.0 | 87.5 | 87.5 | 90.0 | **91.2** | 70.0 | 0 | 42.7 | 23.4 | 79 |
 | `x9_v2_1_minus_anti_echo` | 100.0 | 92.5 | 95.0 | 97.5 | **96.2** | 82.5 | 0 | 44.1 | 22.7 | 73 |
+| `11_engine_v2_2_lean` | 100.0 | 92.5 | 92.5 | 97.5 | **95.6** | 82.5 | 0 | 43.9 | 22.8 | 71 |
 
-Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 30/0/10; `2_raw_base_plus_stops` 30/1/9; `3_urial_3shot_prefix` 18/9/13; `4_static_caa` 17/6/17; `5_lifecycle_plus_nullspace` 30/2/8; `6_full_assistant_engine` 31/4/5; `x1_lifecycle_only` 31/2/7; `x2_lifecycle_plus_erase` 32/2/6; `x3_full_minus_dynamic_stop` 29/4/7; `x4_pin_attention_only` 30/1/9; `x5_full_minus_erase` 29/3/8; `7_engine_v2_hinge_erase` 29/6/5; `8_engine_v2_signed_attn` 28/6/6; `9_engine_v2_full` 28/6/6; `10_engine_v2_1` 32/5/3; `x6_v2_1_minus_boundary_hinge` 30/5/5; `x7_v2_1_minus_drift_stop` 32/5/3; `x8_v2_1_minus_sibling_orth` 28/7/5; `x9_v2_1_minus_anti_echo` 33/5/2
+Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 30/0/10; `2_raw_base_plus_stops` 30/1/9; `3_urial_3shot_prefix` 18/9/13; `4_static_caa` 17/6/17; `5_lifecycle_plus_nullspace` 30/2/8; `6_full_assistant_engine` 31/4/5; `x1_lifecycle_only` 31/2/7; `x2_lifecycle_plus_erase` 32/2/6; `x3_full_minus_dynamic_stop` 29/4/7; `x4_pin_attention_only` 30/1/9; `x5_full_minus_erase` 29/3/8; `7_engine_v2_hinge_erase` 29/6/5; `8_engine_v2_signed_attn` 28/6/6; `9_engine_v2_full` 28/6/6; `10_engine_v2_1` 32/5/3; `x6_v2_1_minus_boundary_hinge` 30/5/5; `x7_v2_1_minus_drift_stop` 32/5/3; `x8_v2_1_minus_sibling_orth` 28/7/5; `x9_v2_1_minus_anti_echo` 33/5/2; `11_engine_v2_2_lean` 33/5/2
 
 ## 2. Per-category breakdown
 
@@ -62,6 +63,7 @@ Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 30/0/10; `2_raw_base
 | `x7_v2_1_minus_drift_stop` | 96.9 | 90.6 | 87.5 | 96.9 | 100.0 |
 | `x8_v2_1_minus_sibling_orth` | 96.9 | 90.6 | 71.9 | 96.9 | 100.0 |
 | `x9_v2_1_minus_anti_echo` | 96.9 | 90.6 | 96.9 | 96.9 | 100.0 |
+| `11_engine_v2_2_lean` | 96.9 | 90.6 | 96.9 | 93.8 | 100.0 |
 
 ### ConstraintScore (%)
 
@@ -86,6 +88,7 @@ Stop reasons (eos / stop_string / max_tokens): `1_raw_base` 30/0/10; `2_raw_base
 | `x7_v2_1_minus_drift_stop` | 100.0 | 62.5 | 75.0 | 100.0 | 100.0 |
 | `x8_v2_1_minus_sibling_orth` | 100.0 | 62.5 | 75.0 | 100.0 | 100.0 |
 | `x9_v2_1_minus_anti_echo` | 100.0 | 62.5 | 100.0 | 100.0 | 100.0 |
+| `11_engine_v2_2_lean` | 100.0 | 62.5 | 100.0 | 100.0 | 100.0 |
 
 ## 3. Which modules contributed, and why
 
@@ -142,6 +145,14 @@ Conditions 8 and 9 build on `7_engine_v2_hinge_erase`, the better of x5 / 7 on t
 - **reasoning_math Composite**: `6_full_assistant_engine` 100.0% → `7_engine_v2_hinge_erase` 87.5% → `9_engine_v2_full` 87.5% → `10_engine_v2_1` 96.9%.
 - **negative_constraints ConstraintScore**: `6_full_assistant_engine` 50.0% → `7_engine_v2_hinge_erase` 50.0% → `9_engine_v2_full` 87.5% → `10_engine_v2_1` 75.0%.
 - **Mechanism activity on these prompts (condition 10):** EOS boosts by reason centroid 14, drift 11, newturn 4; boundary-window steps 336; unembedding projections 1005 (sibling fallbacks 0); prompts with an anti-echo set 8.
+
+### Phase 4 (v2.2 lean engine, post-trained reference) comparisons
+
+- **v2.2 lean vs. `1_raw_base`** (`1_raw_base` → `11_engine_v2_2_lean`): Composite **+15.0** [+9.4, +21.2] (TurnCross +0.0, Constraint +17.5, CleanStop +40.0, Fluency +2.5, NaturalEOS +7.5).
+- **v2.2 lean vs. `3_urial_3shot_prefix`** (`3_urial_3shot_prefix` → `11_engine_v2_2_lean`): Composite **+11.2** [+5.0, +17.5] (TurnCross +0.0, Constraint +20.0, CleanStop +25.0, Fluency +0.0, NaturalEOS +37.5).
+- **v2.2 lean vs. `10_engine_v2_1`** (`10_engine_v2_1` → `11_engine_v2_2_lean`): Composite **+1.2** [-1.2, +4.4] (TurnCross +0.0, Constraint +5.0, CleanStop +0.0, Fluency +0.0, NaturalEOS +2.5).
+- **v2.2 lean vs. `x9_v2_1_minus_anti_echo`** (`x9_v2_1_minus_anti_echo` → `11_engine_v2_2_lean`): Composite **-0.6** [-1.9, +0.0] (TurnCross +0.0, Constraint +0.0, CleanStop -2.5, Fluency +0.0, NaturalEOS +0.0).
+- **Byte identity with `x9`:** 37/40 responses identical. 11 x9 prompts had a drift-stop EOS boost (the mechanism condition 11 drops); the 3 differing prompts are `t_qa_05`, `t_rm_05`, `t_rm_06`, of which 3 had such a boost.
 
 ### Interpretation (hand-written after inspecting the logged generations)
 
@@ -359,6 +370,19 @@ the verifier cannot tell an evasive non-answer from a compliant one.
   - κ_boundary 1.0 → 1.5 moved dev from 85.0 to 91.7, and κ_boundary 2.0 scored 90.0;
   - sibling K = 4 beat K = 8 (93.3 vs. 91.7), a single-prompt difference.
   Dev composites: `7_engine_v2_hinge_erase` 91.7, `9_engine_v2_full` 91.7, `10_engine_v2_1` 93.3.
+
+### Phase 4 (v2.2 lean engine and post-trained reference) methodology
+
+- **Condition 11 (`11_engine_v2_2_lean`)** keeps the two v2.1 mechanisms that the leave-one-outs credit: the boundary-coupled hinge (κ_boundary = 1.5) and the sibling-orthogonalised projection (K = 4, γ = 1.5, centred). It drops the drift-assisted stop and the anti-echo guard. It has no new coefficients, and the stop check still starts at t ≥ 6 as in v2.1. **Its mechanism set was chosen from the test-set leave-one-outs, so its test score is not a held-out estimate.** Condition 10 remains the dev-selected headline.
+- **Lean execution (`boundary_trigger = "text"`, `sibling_fast = True`):**
+  - **Text-only boundary trigger.** The boundary window opens only when the last generated token contains `. ! ? \n`, or within 2 steps after a newline. The v2.1 score clause is dropped, so the stop-layer completion score is computed only on stop-check steps (punctuation tokens), as in condition 7. No other step has an extra host sync.
+  - **Sync-free projection.** The sibling-orthogonalised projection computes the same arithmetic without host synchronisation: the fallback and Gram-Schmidt branches are `torch.where` selections, and the trace counters stay on device until the answer ends.
+  - **Smaller sibling search.** The sibling search multiplies only the pre-indexed word-token rows of the unembedding (tokens containing an ASCII letter; 61.8% of Qwen2.5's vocabulary) instead of the whole vocabulary.
+- **Why a second vocabulary product remains.**
+  - The siblings are the top-K tokens of the *unprojected* logits, while the emitted logits must come from the *projected* state, so an exact implementation reads the unembedding twice on negation prompts.
+  - Applying the update in logit space (`logits + W·Δh`) does not avoid this: `W·Δh` is itself a full-vocabulary product.
+  - Any re-association that is not bit-identical in bf16 changes greedy outputs at near-ties.
+  - The lean path therefore keeps the exact computation, makes the search product 38% smaller, and removes the synchronisation stalls, which `scripts/bench_speed.py` shows were most of the cost.
 
 ## 4. Calibration diagnostics (per target layer)
 
@@ -1108,133 +1132,3 @@ Options:
 [Step 4] Simplify: 3x = 36
 The answer is 36.
 ~~~
-
-## Appendix: other runs
-
-### `Qwen/Qwen2.5-1.5B` — `results/Qwen__Qwen2.5-1.5B/test40` (40 prompts from `test_prompts.json`, calibration 77/80 prompts, 2 pinned heads: L9H8 (+0.004), L8H6 (+0.002))
-
-| Condition | TurnCross | Constraint | CleanStop | Fluency | **Composite** | NaturalEOS | Extra ctx tokens | ms/token | tok/s | avg new tokens |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `1_raw_base` | 100.0 | 55.0 | 55.0 | 92.5 | **75.6** | 77.5 | 0 | 25.4 | 39.4 | 76 |
-| `2_raw_base_plus_stops` | 100.0 | 55.0 | 67.5 | 100.0 | **80.6** | 77.5 | 0 | 25.1 | 39.9 | 63 |
-| `3_urial_3shot_prefix` | 100.0 | 60.0 | 62.5 | 100.0 | **80.6** | 40.0 | 768 | 30.2 | 33.1 | 118 |
-| `4_static_caa` | 100.0 | 45.0 | 57.5 | 100.0 | **75.6** | 20.0 | 0 | 25.0 | 40.1 | 113 |
-| `5_lifecycle_plus_nullspace` | 100.0 | 60.0 | 75.0 | 87.5 | **80.6** | 67.5 | 0 | 25.6 | 39.1 | 84 |
-| `6_full_assistant_engine` | 100.0 | 62.5 | 80.0 | 95.0 | **84.4** | 67.5 | 0 | 25.7 | 39.0 | 79 |
-| `x1_lifecycle_only` | 100.0 | 60.0 | 62.5 | 100.0 | **80.6** | 67.5 | 0 | 24.2 | 41.2 | 74 |
-| `x2_lifecycle_plus_erase` | 100.0 | 57.5 | 57.5 | 90.0 | **76.2** | 57.5 | 0 | 24.6 | 40.6 | 82 |
-| `x3_full_minus_dynamic_stop` | 100.0 | 62.5 | 77.5 | 95.0 | **83.8** | 62.5 | 0 | 25.4 | 39.3 | 86 |
-| `x4_pin_attention_only` | 100.0 | 62.5 | 67.5 | 100.0 | **82.5** | 80.0 | 0 | 24.3 | 41.2 | 64 |
-| `x5_full_minus_erase` | 100.0 | 57.5 | 67.5 | 100.0 | **81.2** | 62.5 | 0 | 23.5 | 42.6 | 81 |
-| `7_engine_v2_hinge_erase` | 100.0 | 57.5 | 72.5 | 95.0 | **81.2** | 60.0 | 0 | 23.8 | 41.9 | 80 |
-| `8_engine_v2_signed_attn` | 100.0 | 55.0 | 72.5 | 92.5 | **80.0** | 57.5 | 0 | 23.9 | 41.8 | 84 |
-| `9_engine_v2_full` | 100.0 | 70.0 | 70.0 | 87.5 | **81.9** | 60.0 | 0 | 25.9 | 38.6 | 85 |
-| `10_engine_v2_1` | 100.0 | 67.5 | 87.5 | 90.0 | **86.2** | 72.5 | 0 | 26.9 | 37.1 | 77 |
-| `x6_v2_1_minus_boundary_hinge` | 100.0 | 67.5 | 77.5 | 92.5 | **84.4** | 67.5 | 0 | 27.3 | 36.6 | 78 |
-| `x7_v2_1_minus_drift_stop` | 100.0 | 67.5 | 87.5 | 90.0 | **86.2** | 72.5 | 0 | 27.2 | 36.7 | 77 |
-| `x8_v2_1_minus_sibling_orth` | 100.0 | 65.0 | 75.0 | 77.5 | **79.4** | 57.5 | 0 | 26.1 | 38.4 | 88 |
-| `x9_v2_1_minus_anti_echo` | 100.0 | 70.0 | 85.0 | 90.0 | **86.2** | 70.0 | 0 | 26.9 | 37.2 | 77 |
-
-#### Per-category Composite (%)
-
-| Condition | direct_qa | format_constraints | negative_constraints | reasoning_math | code_and_sql |
-|---|---|---|---|---|---|
-| `1_raw_base` | 65.6 | 87.5 | 75.0 | 56.2 | 93.8 |
-| `2_raw_base_plus_stops` | 65.6 | 87.5 | 81.2 | 68.8 | 100.0 |
-| `3_urial_3shot_prefix` | 84.4 | 90.6 | 75.0 | 75.0 | 78.1 |
-| `4_static_caa` | 90.6 | 71.9 | 68.8 | 65.6 | 81.2 |
-| `5_lifecycle_plus_nullspace` | 90.6 | 84.4 | 71.9 | 65.6 | 90.6 |
-| `6_full_assistant_engine` | 93.8 | 87.5 | 78.1 | 71.9 | 90.6 |
-| `x1_lifecycle_only` | 68.8 | 87.5 | 81.2 | 68.8 | 96.9 |
-| `x2_lifecycle_plus_erase` | 59.4 | 84.4 | 81.2 | 62.5 | 93.8 |
-| `x3_full_minus_dynamic_stop` | 90.6 | 87.5 | 78.1 | 71.9 | 90.6 |
-| `x4_pin_attention_only` | 65.6 | 93.8 | 81.2 | 71.9 | 100.0 |
-| `x5_full_minus_erase` | 90.6 | 84.4 | 75.0 | 68.8 | 87.5 |
-| `7_engine_v2_hinge_erase` | 87.5 | 84.4 | 75.0 | 68.8 | 90.6 |
-| `8_engine_v2_signed_attn` | 87.5 | 84.4 | 68.8 | 68.8 | 90.6 |
-| `9_engine_v2_full` | 87.5 | 84.4 | 78.1 | 68.8 | 90.6 |
-| `10_engine_v2_1` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
-| `x6_v2_1_minus_boundary_hinge` | 87.5 | 84.4 | 90.6 | 68.8 | 90.6 |
-| `x7_v2_1_minus_drift_stop` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
-| `x8_v2_1_minus_sibling_orth` | 93.8 | 84.4 | 56.2 | 71.9 | 90.6 |
-| `x9_v2_1_minus_anti_echo` | 93.8 | 84.4 | 90.6 | 71.9 | 90.6 |
-
-#### Per-category ConstraintScore (%)
-
-| Condition | direct_qa | format_constraints | negative_constraints | reasoning_math | code_and_sql |
-|---|---|---|---|---|---|
-| `1_raw_base` | 62.5 | 50.0 | 25.0 | 37.5 | 100.0 |
-| `2_raw_base_plus_stops` | 62.5 | 50.0 | 25.0 | 37.5 | 100.0 |
-| `3_urial_3shot_prefix` | 100.0 | 75.0 | 25.0 | 25.0 | 75.0 |
-| `4_static_caa` | 100.0 | 25.0 | 12.5 | 12.5 | 75.0 |
-| `5_lifecycle_plus_nullspace` | 100.0 | 50.0 | 25.0 | 50.0 | 75.0 |
-| `6_full_assistant_engine` | 100.0 | 50.0 | 25.0 | 62.5 | 75.0 |
-| `x1_lifecycle_only` | 75.0 | 50.0 | 37.5 | 37.5 | 100.0 |
-| `x2_lifecycle_plus_erase` | 75.0 | 37.5 | 37.5 | 37.5 | 100.0 |
-| `x3_full_minus_dynamic_stop` | 100.0 | 50.0 | 25.0 | 62.5 | 75.0 |
-| `x4_pin_attention_only` | 62.5 | 75.0 | 25.0 | 50.0 | 100.0 |
-| `x5_full_minus_erase` | 100.0 | 37.5 | 25.0 | 50.0 | 75.0 |
-| `7_engine_v2_hinge_erase` | 100.0 | 37.5 | 25.0 | 50.0 | 75.0 |
-| `8_engine_v2_signed_attn` | 100.0 | 37.5 | 12.5 | 50.0 | 75.0 |
-| `9_engine_v2_full` | 100.0 | 37.5 | 87.5 | 50.0 | 75.0 |
-| `10_engine_v2_1` | 100.0 | 37.5 | 75.0 | 50.0 | 75.0 |
-| `x6_v2_1_minus_boundary_hinge` | 100.0 | 37.5 | 75.0 | 50.0 | 75.0 |
-| `x7_v2_1_minus_drift_stop` | 100.0 | 37.5 | 75.0 | 50.0 | 75.0 |
-| `x8_v2_1_minus_sibling_orth` | 100.0 | 37.5 | 62.5 | 50.0 | 75.0 |
-| `x9_v2_1_minus_anti_echo` | 100.0 | 37.5 | 87.5 | 50.0 | 75.0 |
-
-#### Module contributions
-
-Deltas are in Composite points on the same prompts; brackets give a 95% paired-bootstrap CI over prompts (10k resamples). With 40 prompts one prompt flipping one metric moves Composite by 0.625 pts, so intervals that straddle 0 should be read as "no detectable difference".
-
-- **Full engine vs. raw base (headline)** (`1_raw_base` → `6_full_assistant_engine`): Composite **+8.8** [+1.2, +16.2] (TurnCross +0.0, Constraint +7.5, CleanStop +25.0, Fluency +2.5, NaturalEOS -10.0).
-- **Full engine vs. unsteered (+stops)** (`2_raw_base_plus_stops` → `6_full_assistant_engine`): Composite **+3.8** [-3.1, +11.2] (TurnCross +0.0, Constraint +7.5, CleanStop +12.5, Fluency -5.0, NaturalEOS -10.0).
-- **Full engine vs. static CAA** (`4_static_caa` → `6_full_assistant_engine`): Composite **+8.8** [+3.8, +13.8] (TurnCross +0.0, Constraint +17.5, CleanStop +22.5, Fluency -5.0, NaturalEOS +47.5).
-- **Hard stop strings alone** (`1_raw_base` → `2_raw_base_plus_stops`): Composite **+5.0** [+1.2, +10.0] (TurnCross +0.0, Constraint +0.0, CleanStop +12.5, Fluency +7.5, NaturalEOS +0.0).
-- **Static single-vector CAA** (`2_raw_base_plus_stops` → `4_static_caa`): Composite **-5.0** [-12.5, +3.1] (TurnCross +0.0, Constraint -10.0, CleanStop -10.0, Fluency +0.0, NaturalEOS -57.5).
-- **Module 1 alone (lifecycle schedule + dynamic stop)** (`2_raw_base_plus_stops` → `x1_lifecycle_only`): Composite **+0.0** [-3.8, +3.8] (TurnCross +0.0, Constraint +5.0, CleanStop -5.0, Fluency +0.0, NaturalEOS -10.0).
-- **+ Module 2 (drift nullspace erasure)** (`x1_lifecycle_only` → `x2_lifecycle_plus_erase`): Composite **-4.4** [-8.1, -0.6] (TurnCross +0.0, Constraint -2.5, CleanStop -5.0, Fluency -10.0, NaturalEOS -10.0).
-- **+ Module 3 (self-contrastive predictor)** (`x2_lifecycle_plus_erase` → `5_lifecycle_plus_nullspace`): Composite **+4.4** [-3.1, +11.9] (TurnCross +0.0, Constraint +2.5, CleanStop +17.5, Fluency -2.5, NaturalEOS +10.0).
-- **Modules 1+2+3 vs. unsteered (+stops)** (`2_raw_base_plus_stops` → `5_lifecycle_plus_nullspace`): Composite **+0.0** [-7.5, +7.5] (TurnCross +0.0, Constraint +5.0, CleanStop +7.5, Fluency -12.5, NaturalEOS -10.0).
-- **Modules 1+2+3 vs. static CAA** (`4_static_caa` → `5_lifecycle_plus_nullspace`): Composite **+5.0** [-0.6, +10.6] (TurnCross +0.0, Constraint +15.0, CleanStop +17.5, Fluency -12.5, NaturalEOS +47.5).
-- **+ Module 4 (instruction-pinning attention)** (`5_lifecycle_plus_nullspace` → `6_full_assistant_engine`): Composite **+3.8** [+0.6, +7.5] (TurnCross +0.0, Constraint +2.5, CleanStop +5.0, Fluency +7.5, NaturalEOS +0.0).
-- **Module 4 alone vs. unsteered (+stops)** (`2_raw_base_plus_stops` → `x4_pin_attention_only`): Composite **+1.9** [+0.0, +4.4] (TurnCross +0.0, Constraint +7.5, CleanStop +0.0, Fluency +0.0, NaturalEOS +2.5).
-- **Removing dynamic stop from the full engine** (`6_full_assistant_engine` → `x3_full_minus_dynamic_stop`): Composite **-0.6** [-1.9, +0.0] (TurnCross +0.0, Constraint +0.0, CleanStop -2.5, Fluency +0.0, NaturalEOS -5.0).
-- **Full engine vs. URIAL 3-shot reference** (`3_urial_3shot_prefix` → `6_full_assistant_engine`): Composite **+3.8** [-3.1, +10.6] (TurnCross +0.0, Constraint +2.5, CleanStop +17.5, Fluency -5.0, NaturalEOS +27.5).
-- In the cumulative ablation chain, the largest single-module gain comes from **Module 3 (predictor)** (+4.4 Composite pts). Chain: Module 1 (lifecycle + stop) +0.0 → Module 2 (nullspace erasure) -4.4 → Module 3 (predictor) +4.4 → Module 4 (attention pinning) +3.8.
-- Context cost: URIAL spends 768 extra prompt tokens per query; the engine spends 0 and decodes at 39.0 tok/s vs. 33.1 tok/s for URIAL and 39.9 tok/s unsteered.
-- Calibration diagnostics: completion-centroid AUC (final token vs. mid-answer punctuation) ranges 0.69–0.86 across target layers (stop check at layer 20); 1–1 drift direction(s) per layer pass the separation test, with trap tokens 2.2–3.1 clean-σ along the leading one; ‖v_init‖/‖h‖ = 0.26–0.36.
-- Module 3 cross-validated R² of the predicted t=0 URIAL shift (beyond the mean shift v_init; CV-selected λ per layer: 100, 100, 100, 100, 100, 1000, 1000, 1000): +0.48 to +0.69 across layers — the input-dependent component carries real signal.
-
-### Phase 2 (engine v2) comparisons
-
-Conditions 8 and 9 build on `7_engine_v2_hinge_erase`, the better of x5 / 7 on the 1.5B dev set. The "best v2" condition is `7_engine_v2_hinge_erase`, selected on **dev** composite (x5_full_minus_erase 88.3, 7_engine_v2_hinge_erase 91.7, 8_engine_v2_signed_attn 91.7, 9_engine_v2_full 91.7), not on these test numbers. Conditions 8 and 9 only differ from their base on prompts that contain a negation (8 of 40 test prompts), so their deltas are driven by the `negative_constraints` category.
-
-- **Dropping v1 Module 2 from the full engine** (`6_full_assistant_engine` → `x5_full_minus_erase`): Composite **-3.1** [-8.1, +1.9] (TurnCross +0.0, Constraint -5.0, CleanStop -12.5, Fluency +5.0, NaturalEOS -5.0).
-- **p99 hinge erasure vs. no erasure** (`x5_full_minus_erase` → `7_engine_v2_hinge_erase`): Composite **+0.0** [-2.5, +2.5] (TurnCross +0.0, Constraint +0.0, CleanStop +5.0, Fluency -5.0, NaturalEOS -2.5).
-- **p99 hinge vs. v1 erasure (both with Modules 1+3+4)** (`6_full_assistant_engine` → `7_engine_v2_hinge_erase`): Composite **-3.1** [-7.5, +1.2] (TurnCross +0.0, Constraint -5.0, CleanStop -7.5, Fluency +0.0, NaturalEOS -7.5).
-- **Signed attention on its dev-selected base** (`7_engine_v2_hinge_erase` → `8_engine_v2_signed_attn`): Composite **-1.2** [-4.4, +1.2] (TurnCross +0.0, Constraint -2.5, CleanStop +0.0, Fluency -2.5, NaturalEOS -2.5).
-- **+ Unembedding projection** (`8_engine_v2_signed_attn` → `9_engine_v2_full`): Composite **+1.9** [-2.5, +6.2] (TurnCross +0.0, Constraint +15.0, CleanStop -2.5, Fluency -5.0, NaturalEOS +2.5).
-- **v1 full engine → v2 full engine** (`6_full_assistant_engine` → `9_engine_v2_full`): Composite **-2.5** [-9.4, +4.4] (TurnCross +0.0, Constraint +7.5, CleanStop -10.0, Fluency -7.5, NaturalEOS -7.5).
-- **Best v2 (`7_engine_v2_hinge_erase`) vs. 1_raw_base** (`1_raw_base` → `7_engine_v2_hinge_erase`): Composite **+5.6** [-1.2, +12.5] (TurnCross +0.0, Constraint +2.5, CleanStop +17.5, Fluency +2.5, NaturalEOS -17.5).
-- **Best v2 (`7_engine_v2_hinge_erase`) vs. 2_raw_base_plus_stops** (`2_raw_base_plus_stops` → `7_engine_v2_hinge_erase`): Composite **+0.6** [-5.6, +6.9] (TurnCross +0.0, Constraint +2.5, CleanStop +5.0, Fluency -5.0, NaturalEOS -17.5).
-- **Best v2 (`7_engine_v2_hinge_erase`) vs. 3_urial_3shot_prefix** (`3_urial_3shot_prefix` → `7_engine_v2_hinge_erase`): Composite **+0.6** [-6.9, +8.1] (TurnCross +0.0, Constraint -2.5, CleanStop +10.0, Fluency -5.0, NaturalEOS +20.0).
-- **Best v2 (`7_engine_v2_hinge_erase`) vs. 4_static_caa** (`4_static_caa` → `7_engine_v2_hinge_erase`): Composite **+5.6** [-0.6, +11.9] (TurnCross +0.0, Constraint +12.5, CleanStop +15.0, Fluency -5.0, NaturalEOS +40.0).
-- **Best v2 (`7_engine_v2_hinge_erase`) vs. 6_full_assistant_engine** (`6_full_assistant_engine` → `7_engine_v2_hinge_erase`): Composite **-3.1** [-7.5, +1.2] (TurnCross +0.0, Constraint -5.0, CleanStop -7.5, Fluency +0.0, NaturalEOS -7.5).
-- **Negative-constraint ConstraintScore** (8 prompts): `1_raw_base` 25.0% → `6_full_assistant_engine` 25.0% → `7_engine_v2_hinge_erase` 25.0% → `8_engine_v2_signed_attn` 12.5% → `9_engine_v2_full` 87.5%.
-
-### Phase 3 (engine v2.1, condition 10) comparisons
-
-- **v2.1 vs. `1_raw_base`** (`1_raw_base` → `10_engine_v2_1`): Composite **+10.6** [+2.5, +18.8] (TurnCross +0.0, Constraint +12.5, CleanStop +32.5, Fluency -2.5, NaturalEOS -5.0).
-- **v2.1 vs. `2_raw_base_plus_stops`** (`2_raw_base_plus_stops` → `10_engine_v2_1`): Composite **+5.6** [-1.9, +13.1] (TurnCross +0.0, Constraint +12.5, CleanStop +20.0, Fluency -10.0, NaturalEOS -5.0).
-- **v2.1 vs. `3_urial_3shot_prefix`** (`3_urial_3shot_prefix` → `10_engine_v2_1`): Composite **+5.6** [-3.8, +15.0] (TurnCross +0.0, Constraint +7.5, CleanStop +25.0, Fluency -10.0, NaturalEOS +32.5).
-- **v2.1 vs. `6_full_assistant_engine`** (`6_full_assistant_engine` → `10_engine_v2_1`): Composite **+1.9** [-5.0, +8.1] (TurnCross +0.0, Constraint +5.0, CleanStop +7.5, Fluency -5.0, NaturalEOS +5.0).
-- **v2.1 vs. `7_engine_v2_hinge_erase`** (`7_engine_v2_hinge_erase` → `10_engine_v2_1`): Composite **+5.0** [-1.2, +11.2] (TurnCross +0.0, Constraint +10.0, CleanStop +15.0, Fluency -5.0, NaturalEOS +12.5).
-- **v2.1 vs. `9_engine_v2_full`** (`9_engine_v2_full` → `10_engine_v2_1`): Composite **+4.4** [-2.5, +11.9] (TurnCross +0.0, Constraint -2.5, CleanStop +17.5, Fluency +2.5, NaturalEOS +12.5).
-- **Leave-one-out: removing the boundary-coupled hinge** (`10_engine_v2_1` → `x6_v2_1_minus_boundary_hinge`): Composite **-1.9** [-6.2, +2.5] (TurnCross +0.0, Constraint +0.0, CleanStop -10.0, Fluency +2.5, NaturalEOS -5.0).
-- **Leave-one-out: removing the drift-assisted stop** (`10_engine_v2_1` → `x7_v2_1_minus_drift_stop`): Composite **+0.0** [+0.0, +0.0] (TurnCross +0.0, Constraint +0.0, CleanStop +0.0, Fluency +0.0, NaturalEOS +0.0).
-- **Leave-one-out: removing the sibling orthogonalisation** (`10_engine_v2_1` → `x8_v2_1_minus_sibling_orth`): Composite **-6.9** [-13.1, -1.9] (TurnCross +0.0, Constraint -2.5, CleanStop -12.5, Fluency -12.5, NaturalEOS -15.0).
-- **Leave-one-out: removing the anti-echo guard** (`10_engine_v2_1` → `x9_v2_1_minus_anti_echo`): Composite **+0.0** [-3.8, +3.8] (TurnCross +0.0, Constraint +2.5, CleanStop -2.5, Fluency +0.0, NaturalEOS -2.5).
-- **reasoning_math Composite**: `6_full_assistant_engine` 71.9% → `7_engine_v2_hinge_erase` 68.8% → `9_engine_v2_full` 68.8% → `10_engine_v2_1` 71.9%.
-- **negative_constraints ConstraintScore**: `6_full_assistant_engine` 25.0% → `7_engine_v2_hinge_erase` 25.0% → `9_engine_v2_full` 87.5% → `10_engine_v2_1` 75.0%.
-- **Mechanism activity on these prompts (condition 10):** EOS boosts by reason centroid 21, drift 12, newturn 6; boundary-window steps 432; unembedding projections 889 (sibling fallbacks 0); prompts with an anti-echo set 8.

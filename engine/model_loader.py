@@ -26,6 +26,8 @@ class LoadedModel:
     d_model: int
     n_heads: int
     eos_token_id: int
+    eos_ids: tuple[int, ...] = ()   # every id that ends a turn (generation_config); base Qwen2.5: (eos_token_id,)
+    attn: str = "steer_eager"       # steer_eager (all benchmark conditions) | sdpa (numerics sensitivity only)
 
     @property
     def slug(self) -> str:
@@ -69,20 +71,29 @@ def find_decoder_layers(model: nn.Module) -> nn.ModuleList:
     return best
 
 
-def load_model(name: str, device: str | None = None, dtype: str = "bfloat16") -> LoadedModel:
+def load_model(name: str, device: str | None = None, dtype: str = "bfloat16", attn: str = "steer_eager") -> LoadedModel:
+    """``attn="sdpa"`` keeps HF's fused attention (no Module-4 bias). In bf16 the eager path rounds attention scores to
+    bf16 before the softmax, which measurably hurts Qwen2.5-1.5B arithmetic; sdpa exists to quantify that."""
+    if attn not in ("steer_eager", "sdpa"):
+        raise ValueError(f"unknown attention implementation {attn!r}")
     dev = pick_device(device)
     torch_dtype = _DTYPES[dtype]
     tokenizer = AutoTokenizer.from_pretrained(name)
-    model = AutoModelForCausalLM.from_pretrained(name, dtype=torch_dtype, attn_implementation="eager")
+    model = AutoModelForCausalLM.from_pretrained(name, dtype=torch_dtype,
+                                                 attn_implementation="eager" if attn == "steer_eager" else "sdpa")
     model.to(dev)
     model.eval()
     model.requires_grad_(False)
-    install_steerable_attention(model)
+    if attn == "steer_eager":
+        install_steerable_attention(model)
 
     cfg = model.config
     eos = tokenizer.eos_token_id if tokenizer.eos_token_id is not None else cfg.eos_token_id
     if isinstance(eos, list):
         eos = eos[0]
+    gen_eos = getattr(model.generation_config, "eos_token_id", None)
+    gen_eos = [gen_eos] if isinstance(gen_eos, int) else list(gen_eos or [])
+    eos_ids = tuple(dict.fromkeys([int(eos), *gen_eos]))
     layers = find_decoder_layers(model)
     return LoadedModel(
         name=name,
@@ -95,6 +106,8 @@ def load_model(name: str, device: str | None = None, dtype: str = "bfloat16") ->
         d_model=cfg.hidden_size,
         n_heads=cfg.num_attention_heads,
         eos_token_id=int(eos),
+        eos_ids=eos_ids,
+        attn=attn,
     )
 
 

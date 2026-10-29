@@ -31,6 +31,7 @@ Fluency. Brackets are 95% paired-bootstrap CIs over prompts.
 | `7_engine_v2_hinge_erase` (Phase 2, dev-selected) | 90.0 | 80.0 | 100.0 | 72.5 | 0 | 25.6 | 81.2 |
 | **`10_engine_v2_1` (Phase 3, dev-selected headline)** | **94.4** | **92.5** | 97.5 | **80.0** | **0** | 22.6 | **86.2** |
 | `x9_v2_1_minus_anti_echo` † | 96.2 | 95.0 | 97.5 | 82.5 | 0 | 22.7 | 86.2 |
+| `11_engine_v2_2_lean` (Phase 4) † | 95.6 | 92.5 | 97.5 | 82.5 | 0 | 24.3 ‡ | 86.2 |
 
 On 3B, **condition 10** gains:
 - **+13.8 [+7.5, +20.0]** over the raw base;
@@ -42,7 +43,36 @@ It answers a query in 3.25 s on average, against 5.30 s for URIAL (an M4 Pro, in
 
 † `x9` is a leave-one-out ablation (condition 10 without the anti-echo guard), and it was found *on the test set*. It
 is reported for attribution only. Treating 96.2 as a result would be test-set selection; it needs fresh held-out
-validation first.
+validation first. Condition 11 keeps only the two mechanisms those leave-one-outs credit, so it is equally
+test-informed; its claim is execution cost (‡ same-session benchmark: within 2% of condition 7, against 6% for
+condition 10).
+
+### Versus official post-training (Phase 4)
+
+The official `Qwen/Qwen2.5-3B-Instruct` ran on the same 40 prompts, with the same greedy loop and the same frozen
+verifiers. At the protocol's 160-token budget, Instruct's thorough answers hit the cap on 17/40 prompts, so the fair
+comparison is the 512-token rerun:
+
+| 3B | Weights changed | Artifact | Extra prompt tokens | Clean-token KL from base (held-out, nats) | Composite, 160 tok | Composite, 512 tok | Tokens per answer (512) |
+|---|---|---|---|---|---|---|---|
+| raw base | 0 | – | 0 | 0 | 80.6 | 78.8 | 155 |
+| **engine v2.1** | **0** | **3.0 MB** | **0** | **0.014** | **94.4** | **96.2** | **82** |
+| Qwen2.5-3B-Instruct (chat template) | 86.8% of 3.09B | 6.17 GB | 25 | 0.576 | 86.2 | 94.4 | 214 |
+| Instruct + our sibling-orthogonal ban | 86.8% of 3.09B | 6.17 GB + 0 | 25 | – | 88.8 | **97.5** | 211 |
+
+- **Parity with post-training on these checks.** At 512 tokens, post-training gains +15.6 [+8.8, +22.5] over the raw
+  base. The engine is within noise of Instruct (+1.9 [−1.9, +5.6]) and recovers **112% [87%, 150%]** of that gain.
+  The checks cover starting, stopping, rule-following and not looping, not helpfulness, safety or multi-turn quality.
+  On 1.5B, Instruct leads at 512 tokens (90.0 vs. 87.5; recovery 85% [40%, 135%]).
+- **Complementary, not only a substitute.** Bolting the engine's lexical ban onto Instruct, with no re-tuning, raises
+  negative-constraint compliance from 37.5% to 87.5% and adds +3.1 [+0.6, +6.2] at 512 tokens.
+- **Minimal distortion.** The KL column excludes the 8 prompts where the ban deliberately suppresses a word. There the
+  engine moves the base model's next-token distribution 40× less than post-training does, with 97% top-1 agreement.
+- **Numerics caveat.** Module 4 needs eager attention, and in bf16 eager attention breaks Qwen2.5-1.5B arithmetic (3/8
+  math vs. 8/8 under SDPA). All 1.5B levels in this repository are pessimistic for that reason; 3B is unaffected.
+
+Details, CIs, the SDPA and 512-token sensitivity tables, and verbatim Instruct cases are in
+[RESULTS.md §7–8](RESULTS.md).
 
 **What the numbers do and do not say**
 
@@ -53,7 +83,8 @@ validation first.
 - **Static steering breaks the brakes.** A single vector added at every token lowers natural `<eos>` from 75% to 42.5%
   (3B) and from 77.5% to 20% (1.5B). The engine's decaying schedule keeps it at 80%.
 - **On 1.5B the picture is weaker.** Condition 10 is the best there too (86.2), but only its margin over the raw base is
-  resolved (+10.6 [+2.5, +18.8]). Over the Phase-1 engine it is +1.9 [−5.0, +8.1].
+  resolved (+10.6 [+2.5, +18.8]). Over the Phase-1 engine it is +1.9 [−5.0, +8.1]. All 1.5B levels are depressed by
+  the bf16 eager-attention numerics described above.
 - **Small samples.** Coefficients were tuned on 15 dev prompts, where one prompt equals 1.7 Composite points. Condition
   10's dev margin over conditions 7 and 9 was a single prompt.
 - **Verifier blind spots** are documented in [RESULTS.md](RESULTS.md):
@@ -155,8 +186,9 @@ Try it live with the cached calibration artifact. The model downloads from Huggi
 Re-run conditions on the 40 test prompts. Cached conditions are loaded from `results/` and only missing ones generate:
 
 ```bash
-.venv/bin/python -m eval.benchmark --model Qwen/Qwen2.5-3B --conditions 10_engine_v2_1 --tag test40
-.venv/bin/python -m eval.benchmark --model Qwen/Qwen2.5-3B --tag mynewrun --all    # all 19 conditions; a new tag = fresh run
+.venv/bin/python -m eval.benchmark --model Qwen/Qwen2.5-3B --conditions 10_engine_v2_1 11_engine_v2_2_lean --tag test40
+.venv/bin/python -m eval.benchmark --model Qwen/Qwen2.5-3B-Instruct --tag test40     # post-trained reference (12-13)
+.venv/bin/python -m eval.benchmark --model Qwen/Qwen2.5-3B --tag mynewrun --all    # all 20 base-model conditions; a new tag = fresh run
 ```
 
 Recalibrate. Teacher and raw trajectories are cached in `artifacts/`, so only the forward passes re-run. This
@@ -169,6 +201,55 @@ overwrites `artifacts/<model>/calib80/calibration.pt` in place:
 
 Devices: `engine/model_loader.py` picks `mps`, then `cuda`, then `cpu`; override with `--device`. All reported runs used
 an Apple M4 Pro (24 GB) with `mps` and bfloat16. CUDA and CPU paths are untested.
+
+## Live studio and Circuit X-Ray
+
+A local web app (`demo/`, FastAPI + vanilla JS, no build step) that runs the comparison live and explores the logged
+data:
+
+```bash
+.venv/bin/pip install -r requirements-demo.txt
+./run_demo.sh                        # http://127.0.0.1:8000  (python -m demo.server --instruct swap on < 16 GB)
+.venv/bin/python scripts/verify_demo.py
+```
+
+- **Arena.** Four columns stream token by token on one GPU:
+  - raw base (condition 1);
+  - static CAA (condition 4);
+  - the engine;
+  - Qwen2.5-Instruct, with a switch that attaches the sibling-orthogonal ban (condition 13).
+
+  The first three share the same frozen weights. Their decoders take turns (`engine/stream.py`), and each engine's
+  hooks are live only during its own forward pass.
+- **Circuit X-Ray.** Every engine token carries read-only telemetry:
+  - the initiation pulse and the sustain norm;
+  - drift z(t) against the hinge threshold κ(t) at the stop layer, and per layer;
+  - cosine to the completion centroid;
+  - the ban's suppressed tokens and the four protected siblings (their centred logits move by ≈ 0.00);
+  - the attention the pinned heads pay to the instruction, with and without Module 4's bias;
+  - optionally the **exact** per-token KL against the unsteered model, using one teacher-forced shadow pass per token.
+
+  A drawer toggles M1–M4, the ban and stem morphology, and sets κ_boundary, γ_unembed and β_attn.
+- **Alignment tax & economics.** The KL-vs-Composite chart, unit economics, recovery CIs and the 24-row ablation
+  waterfall. Everything is read from `results/` through `eval/report.py`'s own loaders, so the numbers match RESULTS.md.
+- **Benchmark browser.** All logged generations (protocol, 512-token and SDPA tags, both models) side by side, with
+  filters for category and for prompts where the conditions disagree.
+
+The studio's default engine is **"v2.3 demo"**: condition 11 plus `ban_morphology="stem"`. It is not a benchmark
+condition; every logged condition keeps the exact surface-form ban.
+- **The loophole it closes.** On `t_ng_04` ("…without using the word 'balance'") every logged condition broke the ban
+  while restating the rule. The v2.2 lean engine wrote "balanc" as `bal`+`anc`, which the frozen verifier misses.
+- **What stem mode adds.**
+  - It bans every token that starts a word with the target's stem: `balance` → `balanc`, which covers ` balancing`,
+    ` balanced` and `Balancer`.
+  - It hard-masks tokens that would complete the stem from an unfinished word: after `bal`, it masks `anc`, `ancing`
+    and the like. A sub-word spelling has no single unembedding direction to project out.
+- **Result on `t_ng_04` (3B).** The output contains no "balanc" and passes all four checks. It restates the rule as
+  "balace" instead.
+- **Known over-breadth.** A short stem bans unrelated words. `water` bans ` waterfall`; `apples` → `appl` would ban
+  ` apply`.
+
+Verification results are in [results/demo_verification.json](results/demo_verification.json).
 
 ## Experimental history
 
@@ -184,8 +265,17 @@ The repository records three rounds, all on the same frozen checkpoints, calibra
     ban by construction.
 - **Phase 3** covers condition 10 and the leave-one-out ablations x6–x9: the boundary-coupled hinge and sibling
   orthogonalisation.
+- **Phase 4** covers the economics:
+  - condition 11, the lean engine, which reproduces x9's projection byte for byte and decodes within 2% of
+    condition 7;
+  - conditions 12–13, the official Qwen2.5-Instruct checkpoints with and without the engine's lexical ban;
+  - clean-token KL distortion, a base-vs-Instruct weight diff, and SDPA-attention and 512-token sensitivity runs.
 
 Corrections recorded along the way (details in [RESULTS.md](RESULTS.md)):
+- **bf16 eager attention costs Qwen2.5-1.5B its arithmetic** (found in Phase 4). Module 4 needs eager attention, which
+  in bf16 rounds pre-softmax scores. Under it the 1.5B raw base solves 3/8 math prompts, against 8/8 under SDPA
+  (Composite 75.6 vs. 81.2). The effect is the same for every condition, so 1.5B comparisons stay internally fair, but
+  1.5B absolute levels are depressed. 3B is unaffected (8/8 under both).
 - **Hash-seed bug.** The projection order in conditions 9 and 10 originally depended on the Python hash seed. It is now
   sorted by token id. Condition 9 was re-tuned and re-generated, and the earlier non-reproducible logs are kept as
   `results/*/test40/9_engine_v2_full.nondeterministic_order.jsonl.bak`.
@@ -202,12 +292,17 @@ frozen_assistant_engine/
 ├── docs/                 blog-post.md, eli5-and-use-cases.md
 ├── data/                 calibration (80), dev (15) and held-out test (40) prompts with machine-checkable rules
 ├── engine/               model_loader, prompts (URIAL prefix, traps), calibration (fp64 solves), artifact,
-│                         hooks (all runtime interventions), negation (parser), generator (greedy KV-cached loop)
-├── eval/                 verifiers (metrics), conditions (19 conditions), tune (dev search), benchmark, report
-├── configs/hparams.json  frozen coefficients with full tuning provenance (Phase 1–3)
+│                         hooks (all runtime interventions + telemetry), negation (parser, stem ban),
+│                         generator (greedy KV-cached loop), stream (token-by-token, interleavable decoder)
+├── demo/                 live studio: server.py (FastAPI + SSE), data.py, static/ (HTML/CSS/JS); ./run_demo.sh
+├── eval/                 verifiers (metrics), conditions (20 base + 4 Instruct), tune (dev search), benchmark, report,
+│                         alignment_tax (clean-token KL)
+├── configs/hparams.json  frozen coefficients with full tuning provenance (Phase 1–3; Phase 4 added none)
 ├── artifacts/<model>/    calibration.pt (steering tensors), trajectories.json, calibration_diagnostics.json
-├── results/<model>/      per-condition JSONL generation logs, summary.json, analysis notes, tuning log
-├── scripts/              sanity_check.py, resolve_calibration.py, check_links.py
+├── results/<model>/      per-condition JSONL generation logs, summary.json, analysis notes, tuning log,
+│                         alignment_tax.json, speed_bench.json; <model>-Instruct/ holds conditions 12–13
+├── scripts/              sanity_check.py, resolve_calibration.py, check_cache_reproduces.py, bench_speed.py,
+│                         weight_delta.py, check_links.py, verify_demo.py
 ├── tests/                model-free pytest suite
 └── cli.py                interactive side-by-side comparison
 ```

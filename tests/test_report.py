@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from eval.conditions import summarize
-from eval.report import _load, write_report
+from eval.report import _load, recovery_ci, write_report
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,3 +28,16 @@ def test_report_regenerates(tmp_path):
     assert "| `10_engine_v2_1` | 100.0 | 87.5 | 92.5 | 97.5 | **94.4** |" in text
     assert "| `1_raw_base` | 100.0 | 75.0 | 52.5 | 95.0 | **80.6** |" in text
     assert "## Appendix: other runs" in text
+    assert "| `11_engine_v2_2_lean` |" in text and "## 7. Economics versus post-training" in text
+
+
+def _recs(name, scores):
+    return [{"prompt_id": f"p{i}", "metrics": {"composite": v}} for i, v in enumerate(scores)]
+
+
+def test_recovery_ratio():
+    recs = {"raw": _recs("raw", [0.5] * 10), "eng": _recs("eng", [0.75] * 10), "inst": _recs("inst", [1.0] * 10)}
+    rc = recovery_ci(recs, "raw", "eng", "inst", n_boot=200)
+    assert rc["point"] == pytest.approx(0.5) and rc["lo"] == pytest.approx(0.5) and rc["undefined_frac"] == 0
+    recs["inst"] = _recs("inst", [0.5] * 10)
+    assert recovery_ci(recs, "raw", "eng", "inst", n_boot=50)["point"] is None
