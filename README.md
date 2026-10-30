@@ -243,6 +243,10 @@ data:
   waterfall. Everything is read from `results/` through `eval/report.py`'s own loaders, so the numbers match RESULTS.md.
 - **Benchmark browser.** All logged generations (protocol, 512-token and SDPA tags, both models) side by side, with
   filters for category and for prompts where the conditions disagree.
+- **Zen mode** (`z`, or `#zen` in the URL). One prompt and two answers, set like facing pages: the frozen base with
+  its hook (v2.3 demo defaults) against the official Instruct checkpoint (chat template, no ban). The forbidden word is
+  underlined wherever it appears, and each answer ends with its four checks in words. ←/→ step through the scenarios,
+  ↵ asks, `/` takes your own prompt, and Esc stops a run or leaves.
 
 The studio's default engine is **"v2.3 demo"**: condition 11 plus `ban_morphology="stem"`. It is not a benchmark
 condition; every logged condition keeps the exact surface-form ban.

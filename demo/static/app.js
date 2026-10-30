@@ -77,6 +77,7 @@ function showView(v) {
 function setModel(m) {
   if (m === S.model) return;
   if (S.running) stopRun();
+  if (Z.ctrl) zenStop(false);
   S.model = m;
   $$("#model-switch button").forEach((b) => { b.classList.toggle("on", b.dataset.model === m); b.setAttribute("aria-pressed", b.dataset.model === m); });
   renderPresets();
@@ -85,6 +86,7 @@ function setModel(m) {
   const active = $(".tab.active").dataset.view;
   if (active === "economics") loadEconomics();
   if (active === "browser") loadBrowser();
+  if (Z.on) { zenSync(); zenReset(); zenStatus("Press ↵ to ask both models."); }
   toast(`Switched to Qwen2.5-${m}. The next live run loads it (the other family is evicted).`);
 }
 
@@ -101,7 +103,7 @@ async function pollStatus() {
     $("#ram-models").textContent = s.loading ? `loading ${s.loading.replace("Qwen/", "")}…` : (res ? `${res}${mps}${pol ? ` · Instruct: ${pol}` : ""}` : "no model resident (loads on first run)");
     $("#ram").title = (s.events || []).join("\n");
     const fp = JSON.stringify(s.footprint || null);
-    if (fp !== S._fp) { S._fp = fp; S.footprint = s.footprint; if (typeof updateInstructHeader === "function") updateInstructHeader(); }
+    if (fp !== S._fp) { S._fp = fp; S.footprint = s.footprint; if (typeof updateInstructHeader === "function") updateInstructHeader(); if (Z.on) zenSync(); }
     const f = s.footprint && s.footprint[S.model];
     if (f) {
       $("#dm-eng").textContent = `${fmtBytes(f.artifact_bytes)} · 0% weights`;
@@ -353,6 +355,7 @@ function finishRun(R, reason) {
 
 async function run(cols) {
   if (!S.cur) return;
+  if (Z.ctrl) zenStop(false);                  // a zen run is pre-empted the same way
   if (S.ctrl) stopRun();                       // pre-empt silently; claim the run synchronously so a 2nd click aborts this one
   const mine = S.ctrl = new AbortController(), cancelP = S.cancelP, snap = snapNow();
   const R = S.run = { cols, t0: performance.now(), ended: false, failed: false, cancelled: false };
@@ -1187,6 +1190,230 @@ function renderBrDetail() {
   });
 }
 
+/* ============================== zen mode ============================== */
+/* One prompt, two answers: the frozen base + hook (the v2.3 demo defaults, not the drawer's ablation) against the
+   official Instruct checkpoint (chat template, no ban). Its own SSE consumer; zen and the arena pre-empt each other. */
+const ZEN_COLS = ["engine", "instruct"];
+const ZEN_OPTS = { modules: { lifecycle: true, boundary_hinge: true, predictor: true, pin_attention: true, unembed_ban: true, stem: true },
+  kappa_boundary: 1.5, gamma_unembed: 1.5, beta_attn: 0.5 };
+const Z = { on: false, list: [], i: 0, custom: null, ctrl: null, run: null, cols: {}, stems: [] };
+
+function initZen() {
+  Z.list = [...new Set(S.presets.flatMap((p) => p.prompts))];
+  $("#zen-open").addEventListener("click", enterZen);
+  $("#zen-exit").addEventListener("click", exitZen);
+  $("#zen-prev").addEventListener("click", () => zenGo(-1));
+  $("#zen-next").addEventListener("click", () => zenGo(1));
+  $("#zen-run").addEventListener("click", () => (Z.ctrl ? zenStop(true) : zenRun()));
+  $("#zen-write").addEventListener("click", zenEdit);
+  $$("#zen-models button").forEach((b) => b.addEventListener("click", () => setModel(b.dataset.model)));
+  const ed = $("#zen-edit");
+  ed.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const t = ed.value.trim(); if (t) { Z.custom = t; zenEditDone(); zenRun(); } }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); zenEditDone(); }
+  });
+  document.addEventListener("keydown", zenKeys);
+  if (location.hash === "#zen") enterZen();
+}
+
+function zenKeys(e) {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+  const t = e.target, typing = t.closest && t.closest("input, textarea, select, [contenteditable]");
+  if (!Z.on) { if (e.key === "z" && !typing) { e.preventDefault(); enterZen(); } return; }
+  if (typing) return;
+  if (e.key === "Escape") { e.preventDefault(); if (Z.ctrl) zenStop(true); else exitZen(); }
+  else if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); zenGo(e.key === "ArrowLeft" ? -1 : 1); }
+  else if (e.key === "Enter" && !(t.closest && t.closest("button"))) { e.preventDefault(); zenRun(); }
+  else if (e.key === "/") { e.preventDefault(); zenEdit(); }
+}
+
+function enterZen() {
+  if (Z.on || !Z.list.length) return;
+  Z.on = true;
+  if (typeof setDrawer === "function") setDrawer(false);
+  if (S.cur && S.cur.pid && Z.list.includes(S.cur.pid)) { Z.i = Z.list.indexOf(S.cur.pid); Z.custom = null; }
+  document.body.classList.add("zen-on");
+  const z = $("#zen");
+  z.hidden = false;
+  z.classList.remove("enter"); void z.offsetWidth; z.classList.add("enter");
+  zenSync(); zenPrompt(); zenReset();
+  zenStatus("Press ↵ to ask both models.");
+  history.replaceState(null, "", "#zen");
+  z.scrollTop = 0;
+  z.focus({ preventScroll: true });
+}
+
+function exitZen() {
+  if (!Z.on) return;
+  if (Z.ctrl) zenStop(false);
+  Z.on = false;
+  zenEditDone();
+  document.body.classList.remove("zen-on");
+  $("#zen").hidden = true;
+  history.replaceState(null, "", location.pathname + location.search);
+  requestAnimationFrame(drawScope);
+  $("#zen-open").focus({ preventScroll: true });
+}
+
+/* Model toggle, hook size and how much of the checkpoint post-training rewrote, for the current family. */
+function zenSync() {
+  $$("#zen-models button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.model === S.model));
+  const f = S.footprint && S.footprint[S.model], wd = (f && f.weight_delta) || {};
+  if (f && f.artifact_bytes) $("#zen-hook").textContent = fmtBytes(f.artifact_bytes);
+  $("#zen-eng-sub").textContent = `Qwen2.5-${S.model} · not one weight changed`;
+  $("#zen-ins-sub").textContent = `Qwen2.5-${S.model}-Instruct · ` + (wd.params_changed_frac != null ?
+    `${(100 * wd.params_changed_frac).toFixed(1)}% of weights rewritten` : "weights rewritten by post-training");
+}
+
+const zenPid = () => (Z.custom ? null : Z.list[Z.i]);
+const zenMark = (text, stems) => (stems || []).reduce((h, st) => h.replace(new RegExp(`\\b(${st}[a-z]*)`, "gi"), "<mark>$1</mark>"), esc(text));
+
+function zenPrompt() {
+  const pid = zenPid(), p = pid && S.byId[pid], pr = pid && S.presets.find((x) => x.prompts.includes(pid));
+  $("#zen-meta").innerHTML = pid ? `<b>${Z.i + 1}</b> / ${Z.list.length} · ${esc(pr ? pr.title : CAT_LABEL[p.category])}` : "your prompt";
+  const el = $("#zen-prompt");
+  el.innerHTML = zenMark(p ? p.instruction : Z.custom, p ? p.stems : []);
+  el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap");
+}
+
+function zenGo(d) {
+  if (Z.ctrl) zenStop(false);
+  if (Z.custom) Z.custom = null;
+  else Z.i = (Z.i + d + Z.list.length) % Z.list.length;
+  zenEditDone();
+  zenPrompt(); zenReset();
+  zenStatus("Press ↵ to ask both models.");
+}
+
+function zenEdit() {
+  const ed = $("#zen-edit");
+  ed.value = Z.custom || "";
+  ed.hidden = false; $("#zen-prompt").hidden = true;
+  ed.focus();
+}
+
+function zenEditDone() {
+  $("#zen-edit").hidden = true; $("#zen-prompt").hidden = false;
+  if (Z.on) zenPrompt();
+}
+
+function zenStatus(msg, err = false) {
+  const el = $("#zen-status");
+  el.textContent = msg || "";
+  el.classList.toggle("err", err);
+}
+
+function zenReset() {
+  const pid = zenPid();
+  Z.stems = pid ? S.byId[pid].stems : [];
+  for (const c of ZEN_COLS) {
+    Z.cols[c] = { text: "", n: 0, started: false, done: null };
+    $(`.zen-page[data-col="${c}"] [data-role=text]`).innerHTML = "";
+    $(`.zen-page[data-col="${c}"] [data-role=verdict]`).innerHTML = "";
+  }
+  zenRunLabel();
+}
+
+function zenRender(c) {
+  const st = Z.cols[c], el = $(`.zen-page[data-col="${c}"] [data-role=text]`);
+  el.innerHTML = zenMark(st.text.replace(/^\s+/, ""), Z.stems);   // the first token's leading space, not part of the reading
+  el.classList.toggle("live", !!(Z.ctrl && st.started && !st.done));
+}
+
+function zenRunLabel() {
+  const b = $("#zen-run");
+  b.textContent = Z.ctrl ? "stop · esc" : "ask ↵";
+  b.setAttribute("aria-keyshortcuts", Z.ctrl ? "Escape" : "Enter");
+  $("#zen").classList.toggle("running", !!Z.ctrl);
+}
+
+/* The four frozen checks, in words; a custom prompt has no machine-checkable rule, so it gets three. */
+function zenVerdict(c) {
+  const ev = Z.cols[c].done, m = ev.metrics, el = $(`.zen-page[data-col="${c}"] [data-role=verdict]`);
+  const ks = [["turn_cross", "left its turn"], ["constraint", "broke the rule"], ["clean_stop", "ran on"], ["fluency", "lost fluency"]].filter(([k]) => k !== "constraint" || m.n_checks);
+  const fails = ks.filter(([k]) => !m[k]).map(([, l]) => l);
+  const checks = fails.length ? `<span class="no">${ks.length - fails.length} of ${ks.length} checks · ${fails.join(", ")}</span>` : `<span class="ok">all ${ks.length === 4 ? "four" : "three"} checks</span>`;
+  const stop = { eos: "ended on its own", stop_string: "cut at a stop string", max_tokens: `hit the ${ev.n_new_tokens}-token cap` }[ev.stop_reason] || esc(ev.stop_reason);
+  el.innerHTML = `${checks} · ${stop} · ${ev.n_new_tokens} tokens${ev.logged && ev.logged.identical ? " · matches the benchmark log" : ""}`;
+}
+
+async function zenRun() {
+  const pid = zenPid();
+  if (!Z.on || !(pid || Z.custom)) return;
+  if (S.ctrl) stopRun();                       // the arena's run, silently pre-empted
+  if (Z.ctrl) zenStop(false);
+  const mine = Z.ctrl = new AbortController(), cancelP = S.cancelP, t0 = performance.now();
+  const R = Z.run = { ended: false, failed: false, cancelled: false, finished: false };
+  zenReset();
+  zenStatus("Waking the models…");
+  const body = { model: S.model, prompt_id: pid, instruction: pid ? null : Z.custom, columns: ZEN_COLS, instruct_ban: false, instruct_frame: "chat",
+    ...structuredClone(ZEN_OPTS), max_new_tokens: 160, reference_kl: false, replay: false };
+  try {
+    if (cancelP) await cancelP;                // a Stop pressed just before must reach the server first
+    if (Z.ctrl !== mine) return;
+    const res = await fetch("/api/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: mine.signal });
+    if (Z.ctrl !== mine) return;
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    while (Z.ctrl === mine) {
+      let r;
+      try { r = await reader.read(); } catch (e) { if (e.name === "AbortError") throw e; break; }   // body dropped: "closed"
+      if (r.done || Z.ctrl !== mine) break;
+      buf += dec.decode(r.value, { stream: true });
+      let i;
+      while (Z.ctrl === mine && (i = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        for (const line of chunk.split("\n")) if (Z.ctrl === mine && line.startsWith("data: ")) zenEvent(JSON.parse(line.slice(6)), R, t0);
+      }
+    }
+  } catch (e) {
+    if (e.name !== "AbortError" && Z.ctrl === mine) { R.failed = true; zenStatus(String(e.message || e), true); mine.abort(); }
+  } finally {
+    if (Z.ctrl === mine) { Z.ctrl = null; Z.run = null; zenFinish(R, R.ended ? "end" : R.cancelled ? "cancelled" : R.failed ? "error" : "closed"); }
+  }
+}
+
+function zenEvent(ev, R, t0) {
+  const st = ev.col && Z.cols[ev.col];
+  switch (ev.type) {
+    case "status": zenStatus(ev.msg); break;
+    case "error": R.failed = true; zenStatus(ev.msg, true); break;
+    case "cancelled": R.cancelled = true; break;
+    case "start": if (st) { st.started = true; zenStatus(""); zenRender(ev.col); } break;
+    case "token": if (st && !ev.eos) { st.text += ev.s; st.n += 1; zenRender(ev.col); } break;
+    case "done":                               // the benchmark scores the text up to the stop string, so show exactly that
+      if (st) { st.done = ev; if (ev.cut_char != null) st.text = st.text.slice(0, ev.cut_char); zenRender(ev.col); zenVerdict(ev.col); }
+      break;
+    case "end": R.ended = true; zenStatus(`Both answered in ${((performance.now() - t0) / 1000).toFixed(0)} s.`); break;
+    default: break;
+  }
+}
+
+/* Stop zen's run. user (Esc or the stop button) also cancels on the server; otherwise this is a silent pre-emption. */
+function zenStop(user) {
+  const R = Z.run;
+  if (Z.ctrl) Z.ctrl.abort();
+  Z.ctrl = null; Z.run = null;
+  if (user) { const p = S.cancelP = fetch("/api/cancel", { method: "POST" }).catch(() => {}).finally(() => { if (S.cancelP === p) S.cancelP = null; }); }
+  if (R) zenFinish(R, user ? "stopped" : "preempted");
+}
+
+function zenFinish(R, reason) {
+  if (R.finished) return;
+  R.finished = true;
+  zenRunLabel();
+  for (const c of ZEN_COLS) {
+    const st = Z.cols[c];
+    if (!st || st.done) continue;
+    if (st.started) $(`.zen-page[data-col="${c}"] [data-role=verdict]`).innerHTML = `<span class="no">stopped at ${st.n} tokens · not scored</span>`;
+    zenRender(c);
+  }
+  const msg = { stopped: "Stopped.", cancelled: "Stopped: another run took the GPU.", closed: "The stream closed early (server restarted?)." }[reason];
+  if (msg) zenStatus(msg, reason === "closed");
+}
+
 /* ============================== boot ============================== */
 initHeader();
-initArena().catch((e) => setStatus(`Could not load prompts: ${e.message}`, true));
+initArena().then(initZen).catch((e) => setStatus(`Could not load prompts: ${e.message}`, true));
