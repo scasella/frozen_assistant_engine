@@ -216,7 +216,9 @@ the verifier cannot tell an evasive non-answer from a compliant one.
   - Instruct-chat ends on its own on 37/40 prompts and scores 94.4; post-training's gain is now resolved, +15.6
     [+8.8, +22.5].
   - Condition 10 scores 96.2 (CleanStop 100%, no cap hits): engine − Instruct = +1.9 [−1.9, +5.6], and recovery is
-    **112% [87%, 150%]**. Condition 11 recovers 108% [76%, 157%].
+    **112% [87%, 150%]**. Condition 11 recovers 108% [76%, 157%]. (Re-checked below with fp32 attention scores for
+    all three conditions: still parity by a pre-registered rule, but narrowly. Engine − Instruct is −1.9 [−6.2, +2.5]
+    and recovery 91% [70%, 111%].)
   - The raw base does not improve with room (78.8), because it uses the extra tokens to drift.
   - **On 1.5B, Instruct leads at 512 tokens.** Instruct-chat scores 90.0 against the engine's 87.5, so engine −
     Instruct = −2.5 [−10.0, +4.4] and recovery is 85% [40%, 135%]. That comparison runs on the eager-bf16 stack,
@@ -351,7 +353,7 @@ results above stay primary.
   - The only math flip is `t_rm_05` again ("10:30").
   - The 3B engine is unaffected, as before. Not re-checked: 3B Instruct and raw base on fp32 scores at 512 tokens, so
     the 3B parity claim has not been repeated on a precise stack. 3B Instruct is already 8/8 on math at 512 tokens on
-    eager.
+    eager. (Re-checked below.)
 - **Corrections to the notes above.**
   - "On 1.5B, Instruct-chat did not move (84.4)" is true of its Composite at 160 tokens only.
   - "Pessimistic for the engine" (1.5B at 512 tokens) points the wrong way. The eager stack depresses every 1.5B
@@ -383,3 +385,52 @@ a labelled sensitivity run; the protocol results above stay primary.
     `negative_constraints` violations (it uses the banned word). If all nine flipped, Instruct would gain 5.6 points.
     The constraint misses are a behaviour that fp32 scores have no obvious reason to fix.
   - Confound, as on 1.5B: the coefficients were tuned on the 1.5B dev set on the bf16 stack.
+- **Checks before any test output** (`scripts/check_fp32_attention.py --model Qwen/Qwen2.5-3B`):
+  - In an fp32 model, `steer_fp32` is bit-identical to HF eager (max |logit diff| 0). With a Module-4 bias it is
+    bit-identical to `steer_eager`; the bias itself moves the logits by up to 2.6.
+  - In bf16, against fp32 eager over 869 positions, mean KL is 1.2e-3 for `steer_eager`, 5.9e-4 for `steer_fp32` and
+    6.2e-4 for SDPA (1.5B: 2.7e-2, 7.0e-4, 6.7e-4). Top-1 agreement is 853, 856 and 856.
+  - The 3B raw base solves 7/8 math prompts on it at 160 tokens (protocol and SDPA 8/8). The miss is `t_rm_05`.
+  - After the runs, the new logs reproduced byte for byte at 512 tokens under `PYTHONHASHSEED` 1, on the 6-prompt
+    check subset: 3B conditions 1, 10 and 11, and 3B-Instruct 12 chat.
+- **Outcome: the verdict is "holds", narrowly. The protocol stack's lead does not survive.**
+  - On one stack (`steer_fp32`, 512 tokens) the raw base scores 73.8, engine v2.1 93.8 and Instruct-chat 95.6.
+  - Engine − Instruct = **−1.9 [−6.2, +2.5]**, against +1.9 [−1.9, +5.6] on the protocol stack. The CI includes 0 and
+    the point estimate is above −2.5, so parity holds by the rule above. Two more prompt-metric flips against the
+    engine (0.625 points each) would have made it "weakens".
+  - Recovery is **91% [70%, 111%]**, against 112% [87%, 150%]. Its denominator grew (Instruct − raw base +21.9
+    [+15.0, +28.8], from +15.6) because the raw base fell. With the eager raw base held fixed the ratio is 89%, so the
+    drop is not a denominator artefact.
+  - The lean engine: −0.6 [−5.6, +3.8], recovery 97% [76%, 121%].
+  - Against the eager 512-token Instruct (continuity row), the fp32 engine reads −0.6 [−5.6, +4.4], recovery 97%
+    [73%, 125%].
+  - Where the two differ on this stack: Instruct leads on format_constraints (100 vs. 87.5) and reasoning_math (96.9
+    vs. 90.6). The engine leads on negative_constraints (90.6 vs. 84.4) and direct_qa (100 vs. 96.9).
+- **Paired changes from fp32 scores** (512 tokens, same prompts and frozen coefficients):
+  - Instruct-chat +1.2 [−1.2, +3.8] (94.4 → 95.6). It gains three prompts: two `direct_qa` answers no longer end
+    mid-sentence, and `t_ng_08` stops using the banned word. It loses `t_rm_05` ("the movie ends at 11:00 PM").
+  - Engine v2.1 −2.5 [−5.6, +0.0] (96.2 → 93.8). This is not resolved: the CI touches 0. It loses three prompts and
+    gains none: `t_fm_06` (a format rule), `t_rm_01` (after the right answer it drifts into a `------` worksheet
+    continuation until the cap) and `t_rm_05` ("10:30").
+  - The lean engine −0.6 [−2.5, +1.2], Instruct-bare −0.6 [−5.6, +4.4] and Instruct + ban +0.6 [−1.2, +3.1] (98.1).
+  - The raw base −5.0 [−9.4, −1.2] is the only resolved change of a single condition.
+  - **The change in the engine − Instruct gap**, paired per prompt, is **−3.8 [−7.5, −0.6]** (lean −1.9 [−4.4,
+    +0.6]). It is resolved although neither condition's own change is: the two changes point in opposite directions,
+    and every one of the five prompts whose gap changed moved against the engine (`t_rm_05`, lost by both, cancels).
+    The direction matches 1.5B (−4.4 [−11.9, +2.5]), and this time the change is resolved. Its CI ends one prompt-metric flip
+    from 0.
+- **Reading** (interpretation, not a measurement).
+  - On 3B the bf16 eager stack was already close to precise: its KL to fp32 is 1.2e-3, against 2.7e-2 on 1.5B.
+  - The more precise stack does not make 3B more correct across the board. `t_rm_05`, solved by every condition on
+    eager at 512 tokens, fails on `steer_fp32` for the raw base, both engines, Instruct-chat and Instruct + ban.
+  - So on 3B this run behaves more like a small numerical perturbation than like the removal of a handicap, as on
+    1.5B. Under it Instruct's level barely moves, but the engine's margin over Instruct moves by 3.8 points.
+  - The 3B margin is therefore more fragile than the 3B Instruct level. One candidate cause is that the coefficients
+    were tuned on the bf16 stack (1.5B dev set); this run cannot separate that from anything else.
+  - The 160-token SDPA rule ("Instruct moved 0.6") was right about 3B Instruct, which moves +1.2 here. It never tested
+    the engine or the raw base, and those are what moved.
+- **What survives.**
+  - 3B parity with Instruct at 512 tokens holds by the pre-registered rule on both stacks.
+  - The engine's lead does not survive: on the precise stack Instruct is ahead by 1.9 points (not resolved).
+  - The 112% recovery does not survive either: it is 91% [70%, 111%] on the precise stack.
+  - The protocol numbers stay the primary results; this is a sensitivity run.

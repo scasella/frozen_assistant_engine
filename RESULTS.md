@@ -402,7 +402,9 @@ the verifier cannot tell an evasive non-answer from a compliant one.
   - Instruct-chat ends on its own on 37/40 prompts and scores 94.4; post-training's gain is now resolved, +15.6
     [+8.8, +22.5].
   - Condition 10 scores 96.2 (CleanStop 100%, no cap hits): engine − Instruct = +1.9 [−1.9, +5.6], and recovery is
-    **112% [87%, 150%]**. Condition 11 recovers 108% [76%, 157%].
+    **112% [87%, 150%]**. Condition 11 recovers 108% [76%, 157%]. (Re-checked below with fp32 attention scores for
+    all three conditions: still parity by a pre-registered rule, but narrowly. Engine − Instruct is −1.9 [−6.2, +2.5]
+    and recovery 91% [70%, 111%].)
   - The raw base does not improve with room (78.8), because it uses the extra tokens to drift.
   - **On 1.5B, Instruct leads at 512 tokens.** Instruct-chat scores 90.0 against the engine's 87.5, so engine −
     Instruct = −2.5 [−10.0, +4.4] and recovery is 85% [40%, 135%]. That comparison runs on the eager-bf16 stack,
@@ -537,7 +539,7 @@ results above stay primary.
   - The only math flip is `t_rm_05` again ("10:30").
   - The 3B engine is unaffected, as before. Not re-checked: 3B Instruct and raw base on fp32 scores at 512 tokens, so
     the 3B parity claim has not been repeated on a precise stack. 3B Instruct is already 8/8 on math at 512 tokens on
-    eager.
+    eager. (Re-checked below.)
 - **Corrections to the notes above.**
   - "On 1.5B, Instruct-chat did not move (84.4)" is true of its Composite at 160 tokens only.
   - "Pessimistic for the engine" (1.5B at 512 tokens) points the wrong way. The eager stack depresses every 1.5B
@@ -548,6 +550,76 @@ results above stay primary.
     to be a weak test on 1.5B.
 - **Throughput.** fp32 scores cost speed. The 1.5B raw base runs at 33.4 tok/s against 39.4 on the protocol stack, and
   engine v2.1 at 29.7 against 37.1 (160 tokens).
+
+**Numerics, 3B at 512 tokens (sensitivity run): does 3B parity with Instruct survive fp32 attention scores?** This is
+a labelled sensitivity run; the protocol results above stay primary.
+- **Pre-registered** (written 2026-10-29T23:38Z on c1cc4fb, before any 3B or 3B-Instruct `steer_fp32` log at 512 tokens
+  existed).
+  - Runs, on `steer_fp32` at 512 tokens with the frozen coefficients (tag `test40_512tok_fp32attn`): 3B conditions 1, 2,
+    10 and 11; 3B-Instruct conditions 12 chat, 12 bare and 13 chat. Nothing is re-tuned.
+  - Verdict: condition 10 against `12_official_instruct_chat`, raw base = `1_raw_base`, all three on that stack.
+    Protocol-stack baseline (eager, 512 tokens): engine − Instruct = +1.9 [−1.9, +5.6], recovery 112% [87%, 150%].
+  - **Holds** if the paired CI of engine − Instruct includes 0 and the point estimate is ≥ −2.5. A CI entirely above 0
+    also counts as holding and is reported as "engine ahead".
+  - **Weakens** if the point estimate is < −2.5 while the CI still includes 0.
+  - **Fails** if the CI's upper bound is < 0.
+  - Reported, not used for the verdict: each condition's paired change from fp32 scores; the paired CI of the change
+    in the engine − Instruct gap (per-prompt gap records, the same method that gave −4.4 [−11.9, +2.5] on 1.5B);
+    recovery with `recovery_ci`; condition 11; the eager 512-token Instruct as a continuity row.
+  - Expected, stated before the runs: little room for the 1.5B mechanism. On eager at 512 tokens 3B Instruct-chat
+    already solves 8/8 math. Its nine imperfect prompts are three `direct_qa` truncations and six
+    `negative_constraints` violations (it uses the banned word). If all nine flipped, Instruct would gain 5.6 points.
+    The constraint misses are a behaviour that fp32 scores have no obvious reason to fix.
+  - Confound, as on 1.5B: the coefficients were tuned on the 1.5B dev set on the bf16 stack.
+- **Checks before any test output** (`scripts/check_fp32_attention.py --model Qwen/Qwen2.5-3B`):
+  - In an fp32 model, `steer_fp32` is bit-identical to HF eager (max |logit diff| 0). With a Module-4 bias it is
+    bit-identical to `steer_eager`; the bias itself moves the logits by up to 2.6.
+  - In bf16, against fp32 eager over 869 positions, mean KL is 1.2e-3 for `steer_eager`, 5.9e-4 for `steer_fp32` and
+    6.2e-4 for SDPA (1.5B: 2.7e-2, 7.0e-4, 6.7e-4). Top-1 agreement is 853, 856 and 856.
+  - The 3B raw base solves 7/8 math prompts on it at 160 tokens (protocol and SDPA 8/8). The miss is `t_rm_05`.
+  - After the runs, the new logs reproduced byte for byte at 512 tokens under `PYTHONHASHSEED` 1, on the 6-prompt
+    check subset: 3B conditions 1, 10 and 11, and 3B-Instruct 12 chat.
+- **Outcome: the verdict is "holds", narrowly. The protocol stack's lead does not survive.**
+  - On one stack (`steer_fp32`, 512 tokens) the raw base scores 73.8, engine v2.1 93.8 and Instruct-chat 95.6.
+  - Engine − Instruct = **−1.9 [−6.2, +2.5]**, against +1.9 [−1.9, +5.6] on the protocol stack. The CI includes 0 and
+    the point estimate is above −2.5, so parity holds by the rule above. Two more prompt-metric flips against the
+    engine (0.625 points each) would have made it "weakens".
+  - Recovery is **91% [70%, 111%]**, against 112% [87%, 150%]. Its denominator grew (Instruct − raw base +21.9
+    [+15.0, +28.8], from +15.6) because the raw base fell. With the eager raw base held fixed the ratio is 89%, so the
+    drop is not a denominator artefact.
+  - The lean engine: −0.6 [−5.6, +3.8], recovery 97% [76%, 121%].
+  - Against the eager 512-token Instruct (continuity row), the fp32 engine reads −0.6 [−5.6, +4.4], recovery 97%
+    [73%, 125%].
+  - Where the two differ on this stack: Instruct leads on format_constraints (100 vs. 87.5) and reasoning_math (96.9
+    vs. 90.6). The engine leads on negative_constraints (90.6 vs. 84.4) and direct_qa (100 vs. 96.9).
+- **Paired changes from fp32 scores** (512 tokens, same prompts and frozen coefficients):
+  - Instruct-chat +1.2 [−1.2, +3.8] (94.4 → 95.6). It gains three prompts: two `direct_qa` answers no longer end
+    mid-sentence, and `t_ng_08` stops using the banned word. It loses `t_rm_05` ("the movie ends at 11:00 PM").
+  - Engine v2.1 −2.5 [−5.6, +0.0] (96.2 → 93.8). This is not resolved: the CI touches 0. It loses three prompts and
+    gains none: `t_fm_06` (a format rule), `t_rm_01` (after the right answer it drifts into a `------` worksheet
+    continuation until the cap) and `t_rm_05` ("10:30").
+  - The lean engine −0.6 [−2.5, +1.2], Instruct-bare −0.6 [−5.6, +4.4] and Instruct + ban +0.6 [−1.2, +3.1] (98.1).
+  - The raw base −5.0 [−9.4, −1.2] is the only resolved change of a single condition.
+  - **The change in the engine − Instruct gap**, paired per prompt, is **−3.8 [−7.5, −0.6]** (lean −1.9 [−4.4,
+    +0.6]). It is resolved although neither condition's own change is: the two changes point in opposite directions,
+    and every one of the five prompts whose gap changed moved against the engine (`t_rm_05`, lost by both, cancels).
+    The direction matches 1.5B (−4.4 [−11.9, +2.5]), and this time the change is resolved. Its CI ends one prompt-metric flip
+    from 0.
+- **Reading** (interpretation, not a measurement).
+  - On 3B the bf16 eager stack was already close to precise: its KL to fp32 is 1.2e-3, against 2.7e-2 on 1.5B.
+  - The more precise stack does not make 3B more correct across the board. `t_rm_05`, solved by every condition on
+    eager at 512 tokens, fails on `steer_fp32` for the raw base, both engines, Instruct-chat and Instruct + ban.
+  - So on 3B this run behaves more like a small numerical perturbation than like the removal of a handicap, as on
+    1.5B. Under it Instruct's level barely moves, but the engine's margin over Instruct moves by 3.8 points.
+  - The 3B margin is therefore more fragile than the 3B Instruct level. One candidate cause is that the coefficients
+    were tuned on the bf16 stack (1.5B dev set); this run cannot separate that from anything else.
+  - The 160-token SDPA rule ("Instruct moved 0.6") was right about 3B Instruct, which moves +1.2 here. It never tested
+    the engine or the raw base, and those are what moved.
+- **What survives.**
+  - 3B parity with Instruct at 512 tokens holds by the pre-registered rule on both stacks.
+  - The engine's lead does not survive: on the precise stack Instruct is ahead by 1.9 points (not resolved).
+  - The 112% recovery does not survive either: it is 91% [70%, 111%] on the precise stack.
+  - The protocol numbers stay the primary results; this is a sensitivity run.
 
 ## Methodology notes and caveats
 
@@ -610,7 +682,7 @@ results above stay primary.
   - `test40_512tok` reruns conditions 1, 10, 11, 12 and 13 (chat) with `max_new_tokens = 512`. It was planned after seeing Instruct's 160-token truncations and before any 512-token output existed. Its latencies are not comparable: part of it ran alongside the 1.5B KL job.
   - `test40_sdpa` reruns conditions 1, 2, 12 and 13 (chat) on HF's SDPA attention. The engine conditions cannot run there: SDPA has no slot for the Module-4 bias, and `AssistantEngine` refuses `pin_attention` without a `steer_*` attention.
   - `test40_fp32attn` and `test40_512tok_fp32attn` rerun conditions 1, 2, 10 and 11 on `steer_fp32`: `steer_eager` with query and key upcast before Q·Kᵀ, and the scaling, causal mask, Module-4 bias and softmax in fp32 (the weights are cast back to bf16 for the value matmul). It keeps Module 4, so it measures what the bf16 score rounding costs the engine itself. The coefficients are the frozen ones, tuned on the 1.5B dev set on the bf16 `steer_eager` stack, so the engine runs off its tuning point there; nothing was re-tuned. Checks before any test output (`scripts/check_fp32_attention.py`): in fp32 it is bit-identical to HF eager without a bias and to `steer_eager` with one; in bf16 its logits sit as close to the fp32 reference as SDPA's; the 1.5B raw base solves 8/8 math prompts on it.
-  - The fp32 recovery rows take Instruct from `test40_sdpa` at 160 tokens (precise attention, same budget). At 512 tokens they use a 1.5B Instruct run on `steer_fp32` (conditions 12 and 13 chat, 12 bare), added because the eager stack also costs 1.5B Instruct its arithmetic. Its Composite did not move under SDPA at 160 tokens, but its math went from 2/8 to 4/8 with the other four truncated. The eager 512-token Instruct is listed too, for continuity. The references and the verdict rule were fixed before any fp32 output existed. 3B ran conditions 10 and 11 at 160 tokens only, as a check, so it has no fp32 recovery rows.
+  - The fp32 recovery rows take Instruct from `test40_sdpa` at 160 tokens (precise attention, same budget). At 512 tokens they use a 1.5B Instruct run on `steer_fp32` (conditions 12 and 13 chat, 12 bare), added because the eager stack also costs 1.5B Instruct its arithmetic. Its Composite did not move under SDPA at 160 tokens, but its math went from 2/8 to 4/8 with the other four truncated. The eager 512-token Instruct is listed too, for continuity. The references and the verdict rule were fixed before any fp32 output existed. 3B ran conditions 10 and 11 at 160 tokens only, as a check, so it has no 160-token fp32 recovery rows. At 512 tokens 3B ran conditions 1, 2, 10 and 11 against a 3B-Instruct run on the same stack (12 chat and bare, 13 chat), under a verdict rule fixed before any of those logs existed. The 3B pre-flight passed the same equivalence checks; there the raw base solves 7/8 math prompts on `steer_fp32` at 160 tokens (8/8 under the protocol and SDPA).
 - **Clean-token KL** (`eval/alignment_tax.py`). Each condition is teacher-forced along the same clean answers; engine conditions replay them one token per pass with the full per-step schedule, including the EOS boosts and the lexical ban. The reference is the raw base in the bare frame, decoded step by step. The answers are URIAL-teacher text in the base model's style, not Instruct-style text.
 
 ## 4. Calibration diagnostics (per target layer)
@@ -1411,15 +1483,15 @@ Stop reasons (eos / stop_string / max_tokens): `12_official_instruct_bare` 19/5/
 
 Composite, with the number of answers that hit the token cap in brackets:
 
-| Condition | protocol: eager attention, 160 tokens | SDPA attention, 160 tokens | eager attention, 512 tokens | fp32-score attention, 160 tokens |
-|---|---|---|---|---|
-| `1_raw_base` | 80.6 (10/40) | 78.8 (12/40) | 78.8 (7/40) | – |
-| `2_raw_base_plus_stops` | 81.9 (9/40) | 80.6 (10/40) | – | – |
-| `10_engine_v2_1` | 94.4 (3/40) | – | 96.2 (0/40) | 93.8 (2/40) |
-| `11_engine_v2_2_lean` | 95.6 (2/40) | – | 95.6 (1/40) | 95.6 (1/40) |
-| `12_official_instruct_chat` | 86.2 (17/40) | 85.6 (17/40) | 94.4 (3/40) | – |
-| `12_official_instruct_bare` | 81.9 (16/40) | 82.5 (15/40) | 88.8 (3/40) | – |
-| `13_instruct_plus_orth_ban_chat` | 88.8 (17/40) | 89.4 (17/40) | 97.5 (3/40) | – |
+| Condition | protocol: eager attention, 160 tokens | SDPA attention, 160 tokens | eager attention, 512 tokens | fp32-score attention, 160 tokens | fp32-score attention, 512 tokens |
+|---|---|---|---|---|---|
+| `1_raw_base` | 80.6 (10/40) | 78.8 (12/40) | 78.8 (7/40) | – | 73.8 (9/40) |
+| `2_raw_base_plus_stops` | 81.9 (9/40) | 80.6 (10/40) | – | – | 78.1 (1/40) |
+| `10_engine_v2_1` | 94.4 (3/40) | – | 96.2 (0/40) | 93.8 (2/40) | 93.8 (1/40) |
+| `11_engine_v2_2_lean` | 95.6 (2/40) | – | 95.6 (1/40) | 95.6 (1/40) | 95.0 (1/40) |
+| `12_official_instruct_chat` | 86.2 (17/40) | 85.6 (17/40) | 94.4 (3/40) | – | 95.6 (2/40) |
+| `12_official_instruct_bare` | 81.9 (16/40) | 82.5 (15/40) | 88.8 (3/40) | – | 88.1 (4/40) |
+| `13_instruct_plus_orth_ban_chat` | 88.8 (17/40) | 89.4 (17/40) | 97.5 (3/40) | – | 98.1 (2/40) |
 
 **fp32-score attention vs. the protocol stack** (same prompts, same frozen coefficients; Δ in Composite points with a 95% paired-bootstrap CI; math = `math_answer` checks passed):
 
@@ -1427,6 +1499,12 @@ Composite, with the number of answers that hit the token cap in brackets:
 |---|---|---|---|---|---|---|
 | `10_engine_v2_1` | 160 tokens | 94.4 | 93.8 | -0.6 [-2.5, +1.2] | 8/8 → 7/8 | 19/40 |
 | `11_engine_v2_2_lean` | 160 tokens | 95.6 | 95.6 | +0.0 [-1.9, +1.9] | 8/8 → 7/8 | 20/40 |
+| `1_raw_base` | 512 tokens | 78.8 | 73.8 | -5.0 [-9.4, -1.2] | 8/8 → 7/8 | 15/40 |
+| `10_engine_v2_1` | 512 tokens | 96.2 | 93.8 | -2.5 [-5.6, +0.0] | 8/8 → 7/8 | 19/40 |
+| `11_engine_v2_2_lean` | 512 tokens | 95.6 | 95.0 | -0.6 [-2.5, +1.2] | 8/8 → 7/8 | 20/40 |
+| `12_official_instruct_chat` | 512 tokens | 94.4 | 95.6 | +1.2 [-1.2, +3.8] | 8/8 → 7/8 | 12/40 |
+| `12_official_instruct_bare` | 512 tokens | 88.8 | 88.1 | -0.6 [-5.6, +4.4] | 8/8 → 8/8 | 13/40 |
+| `13_instruct_plus_orth_ban_chat` | 512 tokens | 97.5 | 98.1 | +0.6 [-1.2, +3.1] | 8/8 → 7/8 | 13/40 |
 
 | Stack | Engine | Instruct reference | Instruct − raw base | Engine − Instruct | Post-training recovery |
 |---|---|---|---|---|---|
@@ -1442,6 +1520,14 @@ Composite, with the number of answers that hit the token cap in brackets:
 | eager attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | +10.0 [+1.2, +18.8] | +7.5 [+1.9, +13.1] | **175%** [113%, 600%] |
 | eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +15.6 [+8.8, +22.5] | +1.2 [-4.4, +6.2] | **108%** [76%, 157%] |
 | eager attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | +10.0 [+1.2, +18.8] | +6.9 [+0.6, +13.1] | **169%** [104%, 600%] |
+| fp32-score attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +21.9 [+15.0, +28.8] | -1.9 [-6.2, +2.5] | **91%** [70%, 111%] |
+| fp32-score attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_bare` | +14.4 [+5.0, +23.8] | +5.6 [+0.6, +11.2] | **139%** [102%, 288%] |
+| fp32-score attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +21.9 [+15.0, +28.8] | -0.6 [-5.6, +3.8] | **97%** [76%, 121%] |
+| fp32-score attention, 512 tokens | `11_engine_v2_2_lean` | `12_official_instruct_bare` | +14.4 [+5.0, +23.8] | +6.9 [+1.2, +12.5] | **148%** [106%, 322%] |
+| fp32-score attention, 512 tokens; Instruct from `test40_512tok` | `10_engine_v2_1` | `12_official_instruct_chat` | +20.6 [+13.1, +28.1] | -0.6 [-5.6, +4.4] | **97%** [73%, 125%] |
+| fp32-score attention, 512 tokens; Instruct from `test40_512tok` | `10_engine_v2_1` | `12_official_instruct_bare` | +15.0 [+5.6, +24.4] | +5.0 [-1.2, +11.2] | **133%** [94%, 264%] |
+| fp32-score attention, 512 tokens; Instruct from `test40_512tok` | `11_engine_v2_2_lean` | `12_official_instruct_chat` | +20.6 [+13.1, +28.1] | +0.6 [-5.0, +5.6] | **103%** [78%, 136%] |
+| fp32-score attention, 512 tokens; Instruct from `test40_512tok` | `11_engine_v2_2_lean` | `12_official_instruct_bare` | +15.0 [+5.6, +24.4] | +6.2 [+0.0, +12.5] | **142%** [100%, 291%] |
 
 ### Clean-token KL distortion in detail
 

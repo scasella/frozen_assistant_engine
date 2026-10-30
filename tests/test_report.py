@@ -33,6 +33,9 @@ def test_report_regenerates(tmp_path):
     assert "| `10_engine_v2_1` | 512 tokens | 87.5 | 90.0 | +2.5 [-3.1, +8.1] | 4/8 → 7/8 | 6/40 |" in text
     assert ("| fp32-score attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +18.1 [+11.2, +25.0] "
             "| -6.9 [-12.5, -1.9] | **62%** [28%, 90%] |") in text
+    assert "| `10_engine_v2_1` | 512 tokens | 96.2 | 93.8 | -2.5 [-5.6, +0.0] | 8/8 → 7/8 | 19/40 |" in text   # 3B
+    assert ("| fp32-score attention, 512 tokens | `10_engine_v2_1` | `12_official_instruct_chat` | +21.9 [+15.0, +28.8] "
+            "| -1.9 [-6.2, +2.5] | **91%** [70%, 111%] |") in text
     assert "fp32-score attention, 160 tokens; Instruct from `test40_sdpa`" in text
 
 

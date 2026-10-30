@@ -12,7 +12,8 @@ worked, what didn't, and what we had to take back.*
 > within noise. Several things we tried did nothing, and two of our own earlier claims turned out to be artifacts of a
 > hash-seed bug. **Phase 4:** against the official Qwen2.5-3B-Instruct, given a 512-token budget, the hooks recover
 > **112% [87%, 150%]** of post-training's gain on these checks, with zero changed weights, a 3 MB artifact and 2.6×
-> shorter answers. Bolted onto Instruct, the lexical operator adds +3.1 [+0.6, +6.2].
+> shorter answers. With fp32 attention scores for every condition that becomes 91% [70%, 111%]: still parity, but no
+> longer a lead. Bolted onto Instruct, the lexical operator adds +3.1 [+0.6, +6.2].
 
 ## 1. The problem: base models already answer, then keep going
 
@@ -331,7 +332,8 @@ so the "recovery ratio" the brief asked for is meaningless there.
 Given 512 tokens, Instruct ends on its own on 37 of 40 prompts, and post-training's gain becomes clear:
 **+15.6 [+8.8, +22.5]**. The engine scores 96.2 with no cap hits. Engine − Instruct is **+1.9 [−1.9, +5.6]**, and
 the engine recovers **112% [87%, 150%]** of post-training's gain. The honest summary is *parity* on this benchmark,
-with answers 2.6× shorter. On 1.5B it is not parity: at 512 tokens 1.5B-Instruct leads, 90.0 against 87.5 (engine −
+with answers 2.6× shorter. Parity is all it is: with fp32 attention scores for all three 3B conditions, engine −
+Instruct is −1.9 [−6.2, +2.5] and recovery 91% [70%, 111%] (§7.5). On 1.5B it is not parity: at 512 tokens 1.5B-Instruct leads, 90.0 against 87.5 (engine −
 Instruct −2.5 [−10.0, +4.4], recovery 85% [40%, 135%]). That stack handicaps 1.5B arithmetic, Instruct's included.
 With fp32 attention scores for all three conditions, the gap is −6.9 [−12.5, −1.9] (§7.5).
 
@@ -397,8 +399,17 @@ The result went against the engine. At 512 tokens, fp32 scores lift Instruct-cha
 - We had written that the stack made every 1.5B level pessimistic. That points the wrong way for the comparison with
   Instruct. The stack cost Instruct +6.9 [+3.1, +10.6] and the engine +2.5 [−3.1, +8.1], so the protocol comparison
   more likely flattered the engine.
-- The 3B engine does not move (−0.6 and +0.0 at 160 tokens). We have not repeated the 3B Instruct comparison at 512
-  tokens on fp32 scores.
+- The 3B engine does not move at 160 tokens (−0.6 and +0.0).
+
+We then repeated the 3B comparison at 512 tokens on fp32 scores, with a verdict rule fixed first. Parity would hold
+if the CI of engine − Instruct included 0 and the point estimate was at least −2.5.
+- It holds, narrowly: **−1.9 [−6.2, +2.5]**, with recovery **91% [70%, 111%]** (protocol stack: +1.9 and 112%).
+- The engine's lead does not survive. Instruct moves +1.2 [−1.2, +3.8] and the engine −2.5 [−5.6, +0.0]; neither
+  change is resolved. The gap between them moves by −3.8 [−7.5, −0.6], and that change is resolved: every prompt
+  whose gap changed moved against the engine.
+- On 3B the eager stack was already close to fp32 (KL 1.2e-3, against 2.7e-2 on 1.5B). The precise stack also breaks
+  one math prompt for almost every condition. So this looks more like a small perturbation than a removed handicap,
+  and the engine's 3B margin is the part that is sensitive to it.
 
 fp32 scores also cost about 20% of decode speed (1.5B engine 29.7 vs. 37.1 tok/s). A fused attention kernel with an
 additive bias would avoid both the rounding and the slowdown; it is future work.

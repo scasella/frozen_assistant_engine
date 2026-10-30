@@ -62,7 +62,9 @@ comparison is the 512-token rerun:
 
 - **Parity with post-training on these checks.** At 512 tokens, post-training gains +15.6 [+8.8, +22.5] over the raw
   base. The engine is within noise of Instruct (+1.9 [−1.9, +5.6]) and recovers **112% [87%, 150%]** of that gain.
-  The checks cover starting, stopping, rule-following and not looping, not helpfulness, safety or multi-turn quality.
+  With fp32 attention scores for all three conditions (a sensitivity run), parity still holds by its pre-registered
+  rule, but narrowly: −1.9 [−6.2, +2.5], recovery 91% [70%, 111%]. The paired change in the gap is −3.8 [−7.5, −0.6],
+  so the engine's lead on the protocol stack does not survive. The checks cover starting, stopping, rule-following and not looping, not helpfulness, safety or multi-turn quality.
   On 1.5B, Instruct leads at 512 tokens (90.0 vs. 87.5; recovery 85% [40%, 135%]). A sensitivity run with fp32
   attention scores for all three conditions puts it at 90.0 vs. 96.9: −6.9 [−12.5, −1.9], which excludes parity, and
   recovery 62% [28%, 90%]. The change from −2.5 is itself not resolved (−4.4 [−11.9, +2.5]).
@@ -74,7 +76,8 @@ comparison is the 512-token rerun:
   and Instruct alike (raw base 3/8 math vs. 8/8 under SDPA or fp32 scores). All 1.5B levels in this repository are
   depressed, but not equally. At 512 tokens, fp32 scores lift Instruct by +6.9 [+3.1, +10.6] and the engine by +2.5
   [−3.1, +8.1]. So the protocol-stack 1.5B comparison is not pessimistic for the engine; it more likely flatters it.
-  The 3B engine is unaffected (−0.6 and +0.0 at 160 tokens).
+  The 3B engine is unaffected at 160 tokens (−0.6 and +0.0). At 512 tokens on 3B, fp32 scores move Instruct by +1.2
+  [−1.2, +3.8] and the engine by −2.5 [−5.6, +0.0], neither resolved; the gap between them moves by a resolved −3.8.
 
 Details, CIs, the SDPA and 512-token sensitivity tables, and verbatim Instruct cases are in
 [RESULTS.md §7–8](RESULTS.md).
@@ -286,6 +289,8 @@ Corrections recorded along the way (details in [RESULTS.md](RESULTS.md)):
   - At 512 tokens it costs 1.5B-Instruct 6.9 [3.1, 10.6] points (math 2/8 → 8/8) and the engine 2.5
     [−3.1, 8.1].
   - On a matched fp32 stack, Instruct leads the 1.5B engine by 6.9 [1.9, 12.5] at 512 tokens.
+  - On 3B at 512 tokens the matched fp32 stack keeps parity by a pre-registered rule, but the engine's +1.9 lead
+    becomes −1.9 [−6.2, +2.5] (paired change −3.8 [−7.5, −0.6]), and recovery falls from 112% to 91% [70%, 111%].
   - The protocol results stay primary; the coefficients were tuned on the bf16 stack.
 - **Hash-seed bug.** The projection order in conditions 9 and 10 originally depended on the Python hash seed. It is now
   sorted by token id. Condition 9 was re-tuned and re-generated, and the earlier non-reproducible logs are kept as

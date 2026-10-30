@@ -649,7 +649,10 @@ def _methodology_v22(run: dict, recs: dict, irecs: dict) -> list[str]:
             "160 tokens, but its math went from 2/8 to 4/8 with the other four truncated. The eager 512-token Instruct "
             "is listed too, for continuity. The references and "
             "the verdict rule were fixed before any fp32 output existed. 3B ran conditions 10 and 11 at 160 tokens "
-            "only, as a check, so it has no fp32 recovery rows.",
+            "only, as a check, so it has no 160-token fp32 recovery rows. At 512 tokens 3B ran conditions 1, 2, 10 and "
+            "11 against a 3B-Instruct run on the same stack (12 chat and bare, 13 chat), under a verdict rule fixed "
+            "before any of those logs existed. The 3B pre-flight passed the same equivalence checks; there the raw base "
+            "solves 7/8 math prompts on `steer_fp32` at 160 tokens (8/8 under the protocol and SDPA).",
             "- **Clean-token KL** (`eval/alignment_tax.py`). Each condition is teacher-forced along the same clean "
             "answers; engine conditions replay them one token per pass with the full per-step schedule, including the "
             "EOS boosts and the lexical ban. The reference is the raw base in the bare frame, decoded step by step. The "
