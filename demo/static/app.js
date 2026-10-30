@@ -1209,7 +1209,7 @@ function initZen() {
   $$("#zen-models button").forEach((b) => b.addEventListener("click", () => setModel(b.dataset.model)));
   const ed = $("#zen-edit");
   ed.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const t = ed.value.trim(); if (t) { Z.custom = t; zenEditDone(); zenRun(); } }
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); zenRun(); }
     else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); zenEditDone(); }
   });
   document.addEventListener("keydown", zenKeys);
@@ -1287,9 +1287,21 @@ function zenGo(d) {
 
 function zenEdit() {
   const ed = $("#zen-edit");
-  ed.value = Z.custom || "";
+  if (ed.hidden) ed.value = Z.custom || "";    // reopening starts from the last custom prompt; an open draft is kept
   ed.hidden = false; $("#zen-prompt").hidden = true;
   ed.focus();
+}
+
+/* What is on screen is what gets asked: an open editor's draft wins over the list and over an earlier custom prompt,
+   however the run is started. An empty editor asks nothing. */
+function zenTakeDraft() {
+  const ed = $("#zen-edit");
+  if (ed.hidden) return true;
+  const t = ed.value.trim();
+  if (!t) { ed.focus(); return false; }
+  Z.custom = t;
+  zenEditDone();
+  return true;
 }
 
 function zenEditDone() {
@@ -1338,8 +1350,9 @@ function zenVerdict(c) {
 }
 
 async function zenRun() {
+  if (!Z.on || !zenTakeDraft()) return;
   const pid = zenPid();
-  if (!Z.on || !(pid || Z.custom)) return;
+  if (!(pid || Z.custom)) return;
   if (S.ctrl) stopRun();                       // the arena's run, silently pre-empted
   if (Z.ctrl) zenStop(false);
   const mine = Z.ctrl = new AbortController(), cancelP = S.cancelP, t0 = performance.now();
