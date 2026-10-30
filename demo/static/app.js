@@ -40,16 +40,34 @@ function toast(msg) {
   toast._t = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
+/* Enter / Space activate any non-native [role=button] (keyboard contract for clickable divs). */
+document.addEventListener("keydown", (e) => {
+  const el = e.target;
+  if ((e.key !== "Enter" && e.key !== " ") || e.altKey || e.ctrlKey || e.metaKey || !el.matches?.("[role=button]") || el.matches("button,a[href],input,select,textarea,summary")) return;
+  e.preventDefault();
+  el.click();
+});
+
 /* ============================== header ============================== */
 function initHeader() {
   $$(".tab").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
+  $(".tabs").addEventListener("keydown", (e) => { // roving tabindex: ←/→ wrap, Home/End jump, selection follows focus
+    const tabs = $$(".tab"), i = tabs.indexOf(e.target), j = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+    if (i < 0 || j == null) return;
+    e.preventDefault();
+    const t = tabs[(j + tabs.length) % tabs.length];
+    t.focus(); showView(t.dataset.view);
+  });
   $$("#model-switch button").forEach((b) => b.addEventListener("click", () => setModel(b.dataset.model)));
+  const tb = $(".topbar"); // --topbar-h follows the real header height (it wraps to 2–4 rows below 1440 px)
+  new ResizeObserver(() => document.documentElement.style.setProperty("--topbar-h", `${tb.offsetHeight}px`)).observe(tb);
   pollStatus();
   setInterval(() => { if (!document.hidden) pollStatus(); }, 3000);
 }
 
 function showView(v) {
-  $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+  if (!$(`#view-${v}`).classList.contains("active")) window.scrollTo(0, 0);
+  $$(".tab").forEach((b) => { const on = b.dataset.view === v; b.classList.toggle("active", on); b.setAttribute("aria-selected", on); b.tabIndex = on ? 0 : -1; });
   $$(".view").forEach((s) => s.classList.toggle("active", s.id === `view-${v}`));
   if (v === "economics") loadEconomics();
   if (v === "browser") loadBrowser();
@@ -60,7 +78,7 @@ function setModel(m) {
   if (m === S.model) return;
   if (S.running) stopRun();
   S.model = m;
-  $$("#model-switch button").forEach((b) => b.classList.toggle("on", b.dataset.model === m));
+  $$("#model-switch button").forEach((b) => { b.classList.toggle("on", b.dataset.model === m); b.setAttribute("aria-pressed", b.dataset.model === m); });
   renderPresets();
   resetCards();
   pollStatus();
@@ -82,6 +100,8 @@ async function pollStatus() {
     const pol = Object.values(s.policy || {})[0];
     $("#ram-models").textContent = s.loading ? `loading ${s.loading.replace("Qwen/", "")}…` : (res ? `${res}${mps}${pol ? ` · Instruct: ${pol}` : ""}` : "no model resident (loads on first run)");
     $("#ram").title = (s.events || []).join("\n");
+    const fp = JSON.stringify(s.footprint || null);
+    if (fp !== S._fp) { S._fp = fp; S.footprint = s.footprint; if (typeof updateInstructHeader === "function") updateInstructHeader(); }
     const f = s.footprint && s.footprint[S.model];
     if (f) {
       $("#dm-eng").textContent = `${fmtBytes(f.artifact_bytes)} · 0% weights`;
@@ -112,17 +132,34 @@ async function initArena() {
   });
   renderPresets();
   $("#run-btn").addEventListener("click", () => S.cur ? run(COLS) : toast("Pick a scenario first."));
-  $("#stop-btn").addEventListener("click", stopRun);
+  $("#stop-btn").addEventListener("click", () => stopRun(true));
   $$("#tok-switch button").forEach((b) => b.addEventListener("click", () => {
     S.maxNew = +b.dataset.n;
-    $$("#tok-switch button").forEach((x) => x.classList.toggle("on", x === b));
+    $$("#tok-switch button").forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b); });
     renderPresets();
+    markStale();
   }));
-  $("#instruct-ban").addEventListener("change", () => {
-    updateInstructHeader();
-    if (S.cur && !S.running) run(["instruct"]);
-  });
-  $("#instruct-frame").addEventListener("change", () => { updateInstructHeader(); if (S.cur && !S.running) run(["instruct"]); });
+  $("#exact-kl").addEventListener("change", markStale);
+  $("#replay").addEventListener("change", markStale);
+  const instChange = () => {                   // mid-run: queue an Instruct re-run instead of relabelling a card that has not rerun
+    if (S.running) { S.pendingInstruct = true; toast("Applies when this run finishes"); markStale(); }
+    else if (S.cur) run(["instruct"]);
+    else updateInstructHeader();
+  };
+  $("#instruct-ban").addEventListener("change", instChange);
+  $("#instruct-frame").addEventListener("change", instChange);
+  for (const c of COLS) {
+    $("[data-role=stale]", card(c)).addEventListener("click", () => run([c]));
+    const st = $("[data-role=stream]", card(c)), tel = c === "engine" || c === "instruct";
+    st.tabIndex = 0;
+    st.setAttribute("role", "region");
+    st.setAttribute("aria-label", `${$(".card-title", card(c)).textContent} output${tel ? "; ←/→ step through tokens, Enter inspects" : ""}`);
+    st.addEventListener("keydown", (e) => streamKey(c, st, e));
+    st.addEventListener("blur", () => {
+      $$(".kbd", st).forEach((x) => x.classList.remove("kbd"));
+      if (c === "engine" && S.hover != null && S.hover === st._cur) { S.hover = null; markHover(null); scheduleScope(); }
+    });
+  }
   initDrawer();
   resetCards();
   const scope = $("#scope");
@@ -135,31 +172,56 @@ async function initArena() {
     S._rz = setTimeout(() => { if ($("#view-economics").classList.contains("active")) loadEconomics(); }, 200);
   });
   choosePrompt("t_ng_01", false);
+  setStatus("Press Run 4-way ▶, or click a scenario to run it now: one prompt, four decoders side by side. The first run loads the weights; watch RAM, top right.");
+}
+
+/* Roving keyboard cursor over a stream's inspectable tokens (one tab stop per card instead of one per token). */
+function streamKey(c, st, e) {
+  const toks = (S.cols[c] || {}).tokens || [], idx = toks.map((t, i) => (t.tel ? i : -1)).filter((i) => i >= 0);
+  if (!idx.length || e.altKey || e.ctrlKey || e.metaKey) return;
+  const k = idx.indexOf(st._cur), last = idx.length - 1;
+  const j = { ArrowRight: k < 0 ? 0 : Math.min(k + 1, last), ArrowLeft: k < 0 ? last : Math.max(k - 1, 0), Home: 0, End: last }[e.key];
+  if (e.key === "Enter" && st._cur != null) { e.preventDefault(); inspect(c, st._cur); return; }
+  if (j == null) return;
+  e.preventDefault();
+  st._cur = idx[j];
+  $$(".kbd", st).forEach((x) => x.classList.remove("kbd"));
+  const el = toks[st._cur].el;
+  el.classList.add("kbd");
+  el.scrollIntoView({ block: "nearest" });
+  if (c === "engine") { S.hover = st._cur; markHover(st._cur); drawScope(); } // tokens[i] ↔ S.scope[i]
 }
 
 function outcomeChips(pid) {
   const lg = ((S.presets.find((p) => p.prompts.includes(pid)) || {}).logged || {})[S.model] || {};
-  const per = lg[pid] || {};
-  return `<span class="outcomes" title="Logged outcome at 160 tokens (protocol stack): ✔ = all four checks pass">` + COLS.map((c) => {
+  const per = lg[pid] || {}, said = [];
+  const chips = COLS.map((c) => {
     const r = per[c];
-    if (!r) return `<span class="oc na">${COL_LETTER[c]}</span>`;
+    if (!r) { said.push(`${COL_LETTER[c]} no log`); return `<span class="oc na">${COL_LETTER[c]}</span>`; }
     const ok = r.metrics.composite === 1;
+    said.push(`${COL_LETTER[c]} ${ok ? "pass" : "fail"}`);
     return `<span class="oc ${ok ? "pass" : "fail"}" title="${c}: ${r.condition} composite ${(100 * r.metrics.composite).toFixed(0)}% (${r.stop_reason}, ${r.n_new_tokens} tok)">${COL_LETTER[c]}</span>`;
-  }).join("") + `</span>`;
+  }).join("");
+  return `<span class="outcomes" role="img" aria-label="${said.join(", ")}" title="Logged outcome at 160 tokens (protocol stack): filled = all four checks pass, hollow = fail">${chips}</span>`;
 }
 
 function renderPresets() {
-  const box = $("#presets");
+  const box = $("#presets"), sl = box.scrollLeft, a = document.activeElement;
+  const refocus = a && box.contains(a) ? (a.dataset.pid ? `.pp[data-pid="${a.dataset.pid}"]` : `.preset[data-k="${a.closest(".preset").dataset.k}"] .preset-title`) : null;
   box.innerHTML = S.presets.map((p, k) => `
     <div class="preset${S.cur && p.prompts.includes(S.cur.pid) ? " on" : ""}" data-k="${k}">
-      <div class="preset-title"><span>${esc(p.title)}</span><span class="preset-num">#${k + 1}</span></div>
+      <button type="button" class="preset-title"><span>${esc(p.title)}</span><span class="preset-num">#${k + 1}</span></button>
       <div class="preset-prompts">${p.prompts.map((pid) => `
-        <div class="pp${S.cur && S.cur.pid === pid ? " on" : ""}" data-pid="${pid}"><span class="pid">${pid}</span>
-          <span class="txt">${esc(S.byId[pid].instruction)}</span>${outcomeChips(pid)}</div>`).join("")}</div>
+        <button type="button" class="pp${S.cur && S.cur.pid === pid ? " on" : ""}" data-pid="${pid}"${S.cur && S.cur.pid === pid ? ` aria-current="true"` : ""}><span class="pid">${pid}</span>
+          <span class="txt">${esc(S.byId[pid].instruction)}</span>${outcomeChips(pid)}</button>`).join("")}</div>
       <div class="preset-blurb">${esc(p.blurb)}</div>
     </div>`).join("");
   $$(".pp", box).forEach((el) => el.addEventListener("click", (e) => { e.stopPropagation(); choosePrompt(el.dataset.pid, true); }));
   $$(".preset", box).forEach((el) => el.addEventListener("click", () => choosePrompt(S.presets[+el.dataset.k].prompts[0], true)));
+  box.scrollLeft = sl;                         // the ≤1100 px strip keeps its place; keyboard focus survives the re-render
+  const on = $(".preset.on", box), d = on ? on.getBoundingClientRect().left - box.getBoundingClientRect().left : 0;
+  if (on && box.scrollWidth > box.clientWidth && (d < 0 || d + on.offsetWidth > box.clientWidth + 1)) box.scrollLeft += d; // …unless the current scenario is off-strip
+  if (refocus && $(refocus, box)) $(refocus, box).focus({ preventScroll: true });
 }
 
 function choosePrompt(pid, autorun, custom) {
@@ -168,8 +230,14 @@ function choosePrompt(pid, autorun, custom) {
   $("#cur-pid").textContent = pid || "custom";
   $("#cur-prompt").textContent = S.cur.instruction;
   if (pid) $("#prompt-select").value = pid;
+  $$("#tok-switch button").forEach((x) => { x.classList.toggle("on", +x.dataset.n === S.maxNew); x.setAttribute("aria-pressed", +x.dataset.n === S.maxNew); });
   renderPresets();
   resetCards();
+  const fix = S.presets.find((p) => p.id === "fix_instruct"), sw = $(".card[data-col=instruct] .switch");
+  if (pid && fix && fix.prompts.includes(pid) && !matchMedia("(prefers-reduced-motion: reduce)").matches) {   // "Flip + ban": point at the switch the scenario is about
+    sw.classList.remove("pulse"); void sw.offsetWidth; sw.classList.add("pulse");
+    sw.addEventListener("animationend", () => sw.classList.remove("pulse"), { once: true });
+  }
   if (autorun) run(COLS);
 }
 
@@ -181,21 +249,59 @@ function resetCards(cols = COLS) {
     S.cols[c] = { tokens: [], text: "", done: null, start: null };
     const st = $("[data-role=stream]", card(c));
     st.innerHTML = `<span class="placeholder">${S.cur ? "Ready — press Run." : "Waiting for a prompt."}</span>`;
+    st._cur = null;
     $("[data-role=badges]", card(c)).innerHTML = "";
+    $("[data-role=score]", card(c)).textContent = "";
   }
+  if (cols.includes("instruct")) S.pendingInstruct = false;   // a queued Instruct rerun belongs to the outputs just cleared
   if (cols.includes("engine")) {
     S.scope = []; S.sel = null; S.hover = null;
     $("#inspector").innerHTML = `<div class="empty">Run a prompt, then click any engine token.</div>`;
     requestAnimationFrame(drawScope);
   }
   updateInstructHeader();
+  markStale();
 }
 
+/* Instruct header from what ran (its start event), else from the run's request, else a preview of the toggles; so a
+   mid-run toggle never relabels the card before it reruns. Checkpoint/hook sizes come from S.footprint when known. */
 function updateInstructHeader() {
-  const ban = $("#instruct-ban").checked, frame = $("#instruct-frame").value;
-  $("[data-role=title]", card("instruct")).textContent = ban ? "Official Instruct + our ban" : "Official Instruct (post-trained)";
-  $("[data-role=isub]", card("instruct")).textContent = ban ? "6.17 GB checkpoint + 0-byte lexical operator (cond 13)" : "6.17 GB checkpoint (cond 12)";
-  card("instruct").classList.toggle("hero", ban);
+  const el = card("instruct"), st = S.cols.instruct || {}, ev = st.start, sn = st.snap || snapNow();
+  const f = S.footprint && S.footprint[S.model], wd = (f && f.weight_delta) || {};
+  if (wd.instruct_weights_bytes) $("[data-role=ckpt]", el).textContent = fmtBytes(wd.instruct_weights_bytes);
+  if (f && f.artifact_bytes) $("[data-role=hook]", card("engine")).textContent = fmtBytes(f.artifact_bytes);
+  const ban = ev ? ev.label.includes("our ban") : sn.ban;
+  const cond = ev ? ev.condition : !sn.ban ? "12" : !sn.opts.modules.stem && sn.opts.gamma_unembed === 1.5 ? "13" : null;
+  const title = ev ? ev.label : ban ? `Official Instruct + our ban${cond ? "" : " (stem)"}` : "Official Instruct (post-trained)";
+  const t = $("[data-role=title]", el);
+  t.textContent = title; t.title = title;
+  $("[data-role=icond]", el).textContent = (ban ? " + 0-byte ban" : "") + " · " +
+    (cond ? `cond ${cond.split("_")[0]}` : `cond 13 + ${sn.opts.modules.stem ? "stem ban" : `γ ${sn.opts.gamma_unembed}`} · not logged`);
+  el.classList.toggle("hero", ban);
+}
+
+/* Does column c's output predate the current settings? Only the settings that reach that column count. */
+function staleDiff(c, a, b) {
+  const replayable = !!(S.cur && S.cur.pid && S.cols[c] && S.cols[c].start && S.cols[c].start.condition);   // only logged conditions replay
+  if (a.maxNew !== b.maxNew || (a.replay !== b.replay && replayable)) return true;
+  if (c === "engine") return a.kl !== b.kl || JSON.stringify(a.opts) !== JSON.stringify(b.opts);
+  if (c === "instruct") return a.ban !== b.ban || a.frame !== b.frame ||
+    (b.ban && (a.kl !== b.kl || a.opts.modules.stem !== b.opts.modules.stem || a.opts.gamma_unembed !== b.opts.gamma_unembed));
+  return false;
+}
+
+/* Dim cards whose last run used other settings and offer a one-column re-run (A calls this from the drawer too). */
+function markStale() {
+  if (!S.cols.raw) return;                     // before initArena
+  const now = snapNow();
+  let any = false;
+  for (const c of COLS) {
+    const st = S.cols[c], stale = !!(st && st.snap && st.start && staleDiff(c, st.snap, now));
+    any = any || stale;
+    card(c).classList.toggle("stale", stale);
+    $("[data-role=stale]", card(c)).hidden = !stale;
+  }
+  $("#run-btn").textContent = any ? "Re-run 4-way ▶" : "Run 4-way ▶";
 }
 
 function setStatus(msg, err = false) {
@@ -204,69 +310,124 @@ function setStatus(msg, err = false) {
   el.classList.toggle("err", err);
 }
 
-function stopRun() {
+/* Stop the run in flight. user (the Stop button) also cancels on the server. Otherwise this is a pre-emption (new run,
+   prompt or model): the abort plus the server's own pre-emption cancel it, and a late /api/cancel could hit the new run. */
+function stopRun(user) {
+  const R = S.running ? S.run : null;
   if (S.ctrl) S.ctrl.abort();
-  fetch("/api/cancel", { method: "POST" }).catch(() => {});
-  S.running = false;
+  S.ctrl = null; S.run = null; S.running = false;
   $("#run-btn").disabled = false;
   $("#stop-btn").disabled = true;
-  setStatus("Stopped.");
+  if (user === true) {                         // kept until settled, so every run started meanwhile waits for it
+    S.pendingInstruct = false;
+    const p = S.cancelP = fetch("/api/cancel", { method: "POST" }).catch(() => {}).finally(() => { if (S.cancelP === p) S.cancelP = null; });
+  }
+  if (R) finishRun(R, user === true ? "stopped" : "preempted");
+}
+
+/* Settings a column ran with; markStale() compares them with the current ones. */
+const snapNow = () => ({ maxNew: S.maxNew, kl: $("#exact-kl").checked, replay: $("#replay").checked, ban: $("#instruct-ban").checked,
+  frame: $("#instruct-frame").value, opts: structuredClone(S.opts) });
+
+/* Close out a run: partial columns get "stopped at N tok" + "incomplete · not scored", unstarted ones say so.
+   reason: end | stopped | preempted | cancelled | error | closed (stream ended without `end`). */
+function finishRun(R, reason) {
+  for (const c of R.cols) {
+    const st = S.cols[c], el = card(c);
+    if (!st || st.run !== R || st.done || st.partial) continue;
+    if (st.start) {
+      st.partial = true;
+      const pill = document.createElement("span");
+      pill.className = "cap-pill";
+      pill.textContent = `stopped at ${st.tokens.length} tok`;
+      pill.title = "The run ended before this column finished";
+      $("[data-role=stream]", el).appendChild(pill);
+      $("[data-role=badges]", el).innerHTML = `<span class="badge warn" title="Partial output; not scored">incomplete · not scored</span>`;
+    } else $("[data-role=stream]", el).innerHTML = `<span class="placeholder">Not run: the run ended before this column started.</span>`;
+  }
+  const msg = { stopped: "Stopped by you. Partial outputs are not scored.", preempted: "Previous run stopped.", cancelled: "Cancelled: a newer run (this tab or another window) took the GPU.",
+    closed: "Stream closed before the run finished (server restarted?)." }[reason];
+  if (msg) setStatus(msg, reason === "closed");
+  markStale();
 }
 
 async function run(cols) {
   if (!S.cur) return;
-  if (S.running) { stopRun(); await new Promise((r) => setTimeout(r, 150)); }
-  resetCards(cols);
-  for (const c of cols) $("[data-role=stream]", card(c)).innerHTML = `<span class="placeholder">queued…</span>`;
-  const body = {
-    model: S.model, prompt_id: S.cur.pid, instruction: S.cur.pid ? null : S.cur.instruction, columns: cols,
-    instruct_ban: $("#instruct-ban").checked, instruct_frame: $("#instruct-frame").value,
-    modules: S.opts.modules, kappa_boundary: S.opts.kappa_boundary, gamma_unembed: S.opts.gamma_unembed,
-    beta_attn: S.opts.beta_attn, max_new_tokens: S.maxNew, reference_kl: $("#exact-kl").checked, replay: $("#replay").checked,
-  };
-  S.ctrl = new AbortController();
+  if (S.ctrl) stopRun();                       // pre-empt silently; claim the run synchronously so a 2nd click aborts this one
+  const mine = S.ctrl = new AbortController(), cancelP = S.cancelP, snap = snapNow();
+  const R = S.run = { cols, t0: performance.now(), ended: false, failed: false, cancelled: false };
+  if (cols.includes("instruct")) S.pendingInstruct = false;
   S.running = true;
   $("#run-btn").disabled = true;
   $("#stop-btn").disabled = false;
+  resetCards(cols);
+  for (const c of cols) { Object.assign(S.cols[c], { run: R, snap }); $("[data-role=stream]", card(c)).innerHTML = `<span class="placeholder">queued…</span>`; }
+  markStale();
   setStatus("Starting…");
-  const t0 = performance.now();
+  const body = {
+    model: S.model, prompt_id: S.cur.pid, instruction: S.cur.pid ? null : S.cur.instruction, columns: cols,
+    instruct_ban: snap.ban, instruct_frame: snap.frame, modules: snap.opts.modules, kappa_boundary: snap.opts.kappa_boundary,
+    gamma_unembed: snap.opts.gamma_unembed, beta_attn: snap.opts.beta_attn, max_new_tokens: snap.maxNew, reference_kl: snap.kl, replay: snap.replay,
+  };
+  let res;
   try {
-    const res = await fetch("/api/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: S.ctrl.signal });
+    if (cancelP) await cancelP;                // a Stop pressed just before must reach the server before this run does
+    if (S.ctrl !== mine) return;
+    res = await fetch("/api/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: mine.signal });
+    if (S.ctrl !== mine) return;
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
+    while (S.ctrl === mine) {
+      let r;
+      try { r = await reader.read(); } catch (e) { if (e.name === "AbortError") throw e; break; }   // body dropped mid-stream: finally says "closed"
+      const { value, done } = r;
+      if (done || S.ctrl !== mine) break;
       buf += dec.decode(value, { stream: true });
       let i;
-      while ((i = buf.indexOf("\n\n")) >= 0) {
+      while (S.ctrl === mine && (i = buf.indexOf("\n\n")) >= 0) {
         const chunk = buf.slice(0, i);
         buf = buf.slice(i + 2);
-        for (const line of chunk.split("\n")) if (line.startsWith("data: ")) onEvent(JSON.parse(line.slice(6)), t0);
+        for (const line of chunk.split("\n")) if (S.ctrl === mine && line.startsWith("data: ")) onEvent(JSON.parse(line.slice(6)), R);
       }
     }
-  } catch (e) {
-    if (e.name !== "AbortError") setStatus(String(e.message || e), true);
+  } catch (e) {                                // HTTP or rendering error in our own run: report it and stop the server generating
+    if (e.name !== "AbortError" && S.ctrl === mine) { R.failed = true; setStatus(String(e.message || e), true); mine.abort(); }
   } finally {
-    S.running = false;
-    $("#run-btn").disabled = false;
-    $("#stop-btn").disabled = true;
+    if (S.ctrl === mine) {                     // own run only: a pre-empted run's late finally must not touch the new run
+      S.ctrl = null; S.run = null; S.running = false;
+      $("#run-btn").disabled = false;
+      $("#stop-btn").disabled = true;
+      finishRun(R, R.ended ? "end" : R.cancelled ? "cancelled" : R.failed ? "error" : "closed");
+      scheduleScope();
+      const ist = S.cols.instruct, again = S.pendingInstruct && R.ended && S.cur && (!ist.snap || staleDiff("instruct", ist.snap, snapNow()));
+      S.pendingInstruct = false;
+      if (again) run(["instruct"]);
+    }
   }
 }
 
-function onEvent(ev, t0) {
+function onEvent(ev, R) {
+  const swapWait = () => { if (R.cols.includes("instruct") && !S.cols.instruct.start) $("[data-role=stream]", card("instruct")).innerHTML = `<span class="placeholder">Waiting: Instruct loads after the base columns finish (memory policy: swap).</span>`; };
   switch (ev.type) {
-    case "status": setStatus(ev.msg); break;
-    case "error": setStatus(ev.msg, true); break;
-    case "cancelled": setStatus("Cancelled."); break;
+    case "status": setStatus(ev.msg); if (ev.msg.includes("no cached log")) R.noLog = true; if (ev.msg.includes("swap")) swapWait(); break;
+    case "error": R.failed = true; setStatus(ev.msg, true); break;
+    case "cancelled": R.cancelled = true; setStatus("Cancelled: a newer run (this tab or another window) took the GPU."); break;
     case "start": onStart(ev); break;
-    case "token": onToken(ev); break;
+    case "token":                              // every phase-1 column has started by the first token; Instruct missing = swap policy
+      if (!R.tok1) { R.tok1 = true; if (!R.noLog) swapWait(); }
+      onToken(ev); break;
     case "done": onDone(ev); break;
-    case "end": setStatus(`Done in ${((performance.now() - t0) / 1000).toFixed(1)} s · decoders interleaved token by token on one GPU; tok/s counts each column's own forward passes.`); break;
+    case "end": R.ended = true; setStatus(`Done in ${((performance.now() - R.t0) / 1000).toFixed(1)} s · decoders interleaved token by token on one GPU; tok/s counts each column's own forward passes.`); break;
     default: break;
   }
+}
+
+/* "Streaming N columns…" while any column of this run is mid-stream. */
+function streamingStatus() {
+  const live = COLS.filter((c) => S.run && S.cols[c] && S.cols[c].run === S.run && S.cols[c].start && !S.cols[c].done);
+  if (live.length) setStatus(`Streaming ${live.length} column${live.length > 1 ? "s" : ""}${live.some((c) => S.cols[c].start.reference_kl) ? " (with exact step-KL)" : ""}…`);
 }
 
 function onStart(ev) {
@@ -276,6 +437,7 @@ function onStart(ev) {
   $("[data-role=stream]", el).innerHTML = "";
   if (c === "engine") {
     $("[data-role=title]", el).textContent = ev.label;
+    $("[data-role=title]", el).title = ev.label;  // ellipsised on narrow cards
     const chip = $("[data-role=cond]", el);
     chip.textContent = ev.condition ? "cond 11 · logged" : (ev.label.includes("v2.3") ? "v2.3 demo" : "custom");
     S.promptView.engine = ev.prompt_view;
@@ -284,9 +446,10 @@ function onStart(ev) {
     renderCfgDiff(ev.config_diff);
   } else if (c === "instruct") {
     S.promptView.instruct = ev.prompt_view;
+    updateInstructHeader();                    // relabel from what actually runs (label + condition), not the toggles
   }
   if (ev.source === "cached log") $("[data-role=badges]", el).innerHTML = `<span class="badge neutral">replaying cached log…</span>`;
-  setStatus(`Streaming ${ev.label}${ev.reference_kl ? " (with exact step-KL)" : ""}…`);
+  streamingStatus();
 }
 
 function tokClass(tel) {
@@ -332,7 +495,7 @@ function onToken(ev) {
   if (rec.tel) {
     el.classList.add("inspectable");
     el.title = tokTitle(rec.tel, ev.i);
-    el.addEventListener("click", () => inspect(c, idx));
+    el.addEventListener("click", () => { stream._cur = idx; inspect(c, idx); }); // the keyboard cursor continues from a clicked token
   }
   rec.el = el;
   st.tokens.push(rec);
@@ -377,24 +540,32 @@ function onDone(ev) {
   const m = ev.metrics;
   const b = (ok, label, title = "") => `<span class="badge ${ok ? "pass" : "fail"}" title="${esc(title)}">${label} ${ok ? "✔" : "✘"}</span>`;
   const detail = Object.entries(m.constraint_detail || {}).map(([k, v]) => `${k.split(":")[1]}: ${v ? "pass" : "fail"}`).join("\n");
+  const score = $("[data-role=score]", card(c));
+  score.textContent = `${(100 * m.composite).toFixed(0)}%`;
+  score.title = "Composite = mean of the four checks";
   const html = [
-    `<span class="badge score" title="Composite = mean of the four checks">${(100 * m.composite).toFixed(0)}%</span>`,
     b(m.turn_cross, "TurnCross"),
     m.n_checks ? b(m.constraint, "Constraint", detail) : `<span class="badge neutral" title="No machine-checkable rule found in this custom prompt">Constraint n/a</span>`,
     b(m.clean_stop, "CleanStop", (m.contamination || []).join(", ")),
     b(m.fluency, "Fluency"),
   ];
   if (ev.stem_strict != null) html.push(b(ev.stem_strict, "stem-strict", "No word starts with a banned stem (stricter than the frozen verifier)"));
-  const sr = ev.stop_reason === "eos" ? "EOS" : ev.stop_reason === "stop_string" ? "Stop string" : "Cap";
-  html.push(`<span class="badge ${ev.stop_reason === "max_tokens" ? "warn" : "neutral"}">${sr}</span>`);
+  const [sr, srTitle] = ev.stop_reason === "eos" ? ["EOS", "Emitted end-of-sequence"] : ev.stop_reason === "stop_string" ? ["Stop string", "Cut at a stop string"] : ["Cap", `Hit the ${ev.n_new_tokens}-token cap`];
+  html.push(`<span class="fbreak"></span>`);     // checks on row 1, metadata on row 2
+  html.push(`<span class="badge ${ev.stop_reason === "max_tokens" ? "warn" : "neutral"}" title="${srTitle}">${sr}</span>`);
   html.push(`<span class="badge neutral">${ev.n_new_tokens} tok</span>`);
   if (ev.tok_s) html.push(`<span class="badge neutral" title="${ev.source === "cached log" ? "logged speed" : "own forward passes, interleaved with the other columns"}">${ev.tok_s.toFixed(1)} tok/s</span>`);
-  if (ev.logged) html.push(`<span class="badge ${ev.logged.identical ? "pass" : "warn"}" title="Compared with the cached benchmark log of ${ev.logged.condition}">${ev.logged.identical ? "= logged ✔" : "≠ logged"}</span>`);
+  if (ev.logged) html.push(`<span class="badge ${ev.logged.identical ? "pass" : "warn"}" title="${ev.logged.identical ? "Byte-identical to" : "Differs from"} the cached ${esc(ev.logged.condition)} output">${ev.logged.identical ? "matches log ✔" : "≠ logged"}</span>`);
+  const sl = st.start || {};
+  if (c === "engine" && !ev.logged && sl.label && sl.condition == null) html.push(sl.label.includes("v2.3")
+    ? `<span class="badge neutral" title="v2.3 = cond 11 + stem ban, not a logged condition. Ablation controls → Exactly condition 11 reproduces the log byte for byte.">no log (v2.3)</span>`
+    : `<span class="badge neutral" title="A custom ablation is not a logged condition, so there is no cached output to compare with.">no log (custom)</span>`);
   if (ev.source === "cached log") html.push(`<span class="badge neutral">cached log</span>`);
   const tr = ev.engine_trace || {};
   if (tr.stem_guard_steps) html.push(`<span class="badge neutral" title="Steps where the sub-word guard masked stem completions">guard ×${tr.stem_guard_steps}</span>`);
   $("[data-role=badges]", card(c)).innerHTML = html.join("");
   if (c === "engine") scheduleScope();
+  streamingStatus();
 }
 
 /* ============================== x-ray oscilloscope ============================== */
@@ -426,9 +597,22 @@ function drawScope() {
   const { bw, x } = scopeGeom(W);
   const css = getComputedStyle(document.documentElement);
   const col = (n) => css.getPropertyValue(n).trim();
-  g.font = "10.5px -apple-system, Inter, sans-serif";
-  const trackLabel = (y, txt) => { g.fillStyle = col("--muted"); g.textAlign = "left"; g.fillText(txt, SC.L + 2, y - 5); };
-  const frame = ([y, h]) => { g.strokeStyle = "rgba(148,163,184,0.16)"; g.lineWidth = 1; g.strokeRect(SC.L + 0.5, y + 0.5, W - SC.L - SC.R - 1, h - 1); };
+  const plotW = W - SC.L - SC.R, xR = W - SC.R, px = (v) => Math.round(v) + 0.5; // px: 1px hairlines on whole device pixels (dpr 1 and 2)
+  g.font = `11px ${col("--sans")}`;
+  // titles: the long form when it fits, else drop the parentheticals, else ellipsis
+  const fit = (s, w) => { if (g.measureText(s).width <= w) return s; while (s.length > 1 && g.measureText(s + "…").width > w) s = s.slice(0, -1); return s.trimEnd() + "…"; };
+  const trackLabel = (y, long, short) => { g.fillStyle = col("--muted"); g.textAlign = "left"; g.fillText(g.measureText(long).width <= plotW - 4 ? long : fit(short, plotW - 4), SC.L + 2, y - 5); };
+  const frame = ([y, h]) => { g.strokeStyle = "rgba(148,163,184,0.16)"; g.lineWidth = 1; g.strokeRect(SC.L + 0.5, y + 0.5, plotW - 1, h - 1); };
+  const hline = (y, a = 0.08) => { g.strokeStyle = `rgba(148,163,184,${a})`; g.lineWidth = 1; g.beginPath(); g.moveTo(SC.L, px(y)); g.lineTo(xR, px(y)); g.stroke(); };
+  // shared time axis: tick pitch ≥ 44px; boundary-window runs + tick hairlines sit under every track's data
+  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500].find((s) => bw * s >= 44) || 500;
+  const xt = [], runs = [];
+  for (let i = 0; i < d.length; i += step) xt.push(i);
+  d.forEach((t, i) => { if (!t.in_boundary_window) return; const r = runs[runs.length - 1]; if (r && r[1] === i - 1) r[1] = i; else runs.push([i, i]); });
+  const under = ([y, h], a) => {
+    g.fillStyle = `rgba(148,163,184,${a})`; for (const [i0, i1] of runs) g.fillRect(x(i0) - bw / 2, y, (i1 - i0 + 1) * bw, h);
+    g.strokeStyle = "rgba(148,163,184,0.08)"; g.lineWidth = 1; g.beginPath(); for (const i of xt) { g.moveTo(px(x(i)), y); g.lineTo(px(x(i)), y + h); } g.stroke();
+  };
 
   // --- Track A: drift z vs hinge threshold
   const [ay, ah] = SC.A;
@@ -436,9 +620,10 @@ function drawScope() {
   const ks = d.map((t) => t.hinge_threshold).filter((v) => v != null);
   const zmax = Math.max(3.6, ...zs, ...ks) + 0.4, zmin = Math.min(-3, ...zs) - 0.3;
   const yA = (v) => ay + ah - ((v - zmin) / (zmax - zmin)) * ah;
-  d.forEach((t, i) => { if (t.in_boundary_window) { g.fillStyle = "rgba(148,163,184,0.09)"; g.fillRect(x(i) - bw / 2, ay, bw, ah); } });
-  g.strokeStyle = "rgba(148,163,184,0.12)";
-  [zmin, 0, zmax].forEach((v) => { if (v === 0) { g.beginPath(); g.moveTo(SC.L, yA(0)); g.lineTo(W - SC.R, yA(0)); g.stroke(); } });
+  under(SC.A, 0.09);
+  const zstep = [1, 2, 5, 10].find((s) => (s * ah) / (zmax - zmin) >= 18) || 10, zt = []; // integer-σ ticks, ≥18px apart
+  for (let v = Math.ceil(zmin / zstep) * zstep; v <= zmax; v += zstep) zt.push(v || 0);
+  zt.forEach((v) => hline(yA(v), v === 0 ? 0.16 : 0.06));
   d.forEach((t, i) => {
     if (t.drift_z != null && t.hinge_threshold != null && t.drift_z > t.hinge_threshold) {
       g.fillStyle = "rgba(251,191,36,0.45)";
@@ -446,11 +631,11 @@ function drawScope() {
     }
   });
   // kappa dashed step line
-  g.setLineDash([4, 3]); g.strokeStyle = "#e2e8f0"; g.lineWidth = 1.2; g.beginPath();
+  g.setLineDash([4, 3]); g.strokeStyle = "rgba(226,232,240,0.55)"; g.lineWidth = 1; g.beginPath(); // reference, not the hero mark
   let started = false;
   d.forEach((t, i) => {
     if (t.hinge_threshold == null) { started = false; return; }
-    const y = yA(t.hinge_threshold), x0 = x(i) - bw / 2, x1 = x(i) + bw / 2;
+    const y = px(yA(t.hinge_threshold)), x0 = x(i) - bw / 2, x1 = x(i) + bw / 2;
     if (!started) { g.moveTo(x0, y); started = true; } else g.lineTo(x0, y);
     g.lineTo(x1, y);
   });
@@ -461,13 +646,14 @@ function drawScope() {
   g.stroke();
   d.forEach((t, i) => { if (t.hinge_layers_clamped > 0) { g.fillStyle = col("--hinge"); g.beginPath(); g.moveTo(x(i), ay + 7); g.lineTo(x(i) - 3.5, ay + 1); g.lineTo(x(i) + 3.5, ay + 1); g.fill(); } });
   frame(SC.A);
-  trackLabel(ay, "A · drift z(t) vs hinge κ(t)  (σ units; grey bands = boundary window)");
-  axisLabels(g, yA, [zmin, 0, zmax].map((v) => Math.round(v * 10) / 10), "σ", true);
+  trackLabel(ay, "A · drift z(t) vs hinge κ(t)  (σ units; grey bands = boundary window)", "A · drift z(t) vs hinge κ(t)");
+  axisLabels(g, yA, zt, "σ", true);
 
   // --- Track B: steering schedule + completion cosine
   const [by, bh] = SC.B;
   const nmax = Math.max(5, ...d.map((t) => (t.init_norm || 0) + (t.sustain_norm || 0)));
   const yB = (v) => by + bh - (v / nmax) * bh;
+  under(SC.B, 0.05);
   d.forEach((t, i) => {
     if (t.init_norm > 0) { g.fillStyle = "rgba(74,222,128,0.75)"; g.fillRect(x(i) - Math.max(bw * 0.35, 1), yB(t.init_norm), Math.max(bw * 0.7, 2), by + bh - yB(t.init_norm)); }
   });
@@ -475,46 +661,67 @@ function drawScope() {
   d.forEach((t, i) => { if (t.sustain_norm == null) return; const y = yB(t.sustain_norm); if (!started) { g.moveTo(x(i), y); started = true; } else g.lineTo(x(i), y); });
   g.stroke();
   const yE = (v) => by + bh - ((v + 0.4) / 1.4) * bh;
-  if (S.artifact) { g.setLineDash([2, 3]); g.strokeStyle = "rgba(56,189,248,0.7)"; g.beginPath(); g.moveTo(SC.L, yE(S.artifact.tau_stop)); g.lineTo(W - SC.R, yE(S.artifact.tau_stop)); g.stroke(); g.setLineDash([]); }
+  if (S.artifact) { const ty = px(yE(S.artifact.tau_stop)); g.setLineDash([2, 3]); g.strokeStyle = "rgba(56,189,248,0.7)"; g.lineWidth = 1; g.beginPath(); g.moveTo(SC.L, ty); g.lineTo(xR, ty); g.stroke(); g.setLineDash([]); }
   g.strokeStyle = col("--eos"); g.lineWidth = 1.3; g.beginPath(); started = false;
   d.forEach((t, i) => { if (t.eos_cos == null) { started = false; return; } const y = yE(t.eos_cos); if (!started) { g.moveTo(x(i), y); started = true; } else g.lineTo(x(i), y); });
   g.stroke();
   d.forEach((t, i) => { if (t.stop_events && t.stop_events.some((e) => e.reason)) { g.fillStyle = col("--eos"); g.beginPath(); g.arc(x(i), by + 6, 3, 0, 7); g.fill(); } if (t.eos) { g.fillStyle = col("--eos"); g.fillRect(x(i) - 1, by, 2, bh); } });
   frame(SC.B);
-  trackLabel(by, "B · ‖init + M3‖ (bars) · ‖sustain‖ · cos(h, μ_eos) vs τ_stop (dotted)");
+  trackLabel(by, "B · ‖init + M3‖ (bars) · ‖sustain‖ · cos(h, μ_eos) vs τ_stop (dotted)", "B · ‖init + M3‖ · ‖sustain‖ · cos(h, μ_eos) vs τ_stop");
   axisLabels(g, yB, [0, Math.round(nmax)], "", true);
   axisLabels(g, yE, [-0.4, 0, 1], "", false, W);
+  // unit words at mid-track (nudged off any tick); τ_stop labelled at its own height in the cos-axis colour
+  const tauY = S.artifact ? yE(S.artifact.tau_stop) + 3 : null, rTicks = [-0.4, 0, 1].map((v) => yE(v) + 3).concat(tauY ?? []);
+  const unitY = (ticks) => [0.5, 0.3, 0.7].map((f) => by + bh * f + 3).find((y) => ticks.every((t) => Math.abs(t - y) >= 12)) ?? by + bh / 2 + 3;
+  g.fillStyle = col("--muted"); g.textAlign = "right"; g.fillText("‖Δh‖", SC.L - 5, unitY([yB(0) + 3, yB(Math.round(nmax)) + 3]));
+  g.textAlign = "left"; g.fillText("cos", xR + 5, unitY(rTicks));
+  if (S.artifact) { g.fillStyle = col("--eos"); g.fillText(`τ ${fmt(S.artifact.tau_stop, 2)}`, xR + 5, tauY); }
 
   // --- Track C: per-token KL
   const [cy, ch] = SC.C;
   const kls = d.map((t) => t.step_kl_nats ?? t.lexical_kl_nats ?? 0);
   const kmax = Math.max(0.5, ...kls);
   const yC = (v) => cy + ch - (Math.sqrt(Math.max(v, 0)) / Math.sqrt(kmax)) * ch;
+  under(SC.C, 0.05);
+  const kt = [0.1, 1, 10].filter((v) => v < kmax);
+  kt.forEach((v) => hline(yC(v)));
   d.forEach((t, i) => {
     const v = kls[i];
     if (!v) return;
-    g.fillStyle = t.ban_flipped ? "rgba(192,132,252,0.95)" : "rgba(244,114,182,0.7)";
+    g.fillStyle = t.ban_flipped ? "rgba(192,132,252,0.95)" : "rgba(148,163,184,0.55)"; // grey so the ban flips carry the colour
     g.fillRect(x(i) - Math.max(bw * 0.38, 0.8), yC(v), Math.max(bw * 0.76, 1.6), cy + ch - yC(v));
   });
   frame(SC.C);
   const exact = d.some((t) => t.step_kl_nats != null);
-  trackLabel(cy, `C · ${exact ? "exact" : "lexical-only"} per-token KL vs. unsteered (√ scale; purple = ban flipped the top token)`);
-  axisLabels(g, yC, [0, Math.round(kmax * 10) / 10], "", true);
+  trackLabel(cy, `C · ${exact ? "exact" : "lexical-only"} per-token KL vs. unsteered (√ scale; purple = ban flipped the top token)`, `C · ${exact ? "exact" : "lexical-only"} per-token KL vs. unsteered`);
+  // √ scale crowds the low ticks: place 0 and max first, then 10 / 1 / 0.1 only where ≥9px clear
+  const kl = [];
+  for (const v of [0, Math.round(kmax * 10) / 10, ...kt.reverse()]) if (kl.every((u) => Math.abs(yC(u) - yC(v)) >= 9)) kl.push(v);
+  axisLabels(g, yC, kl, "", true);
 
   // cursor + selection
   for (const [idx, color] of [[S.hover, "rgba(226,232,240,0.5)"], [S.sel, "rgba(45,212,191,0.9)"]]) {
     if (idx == null || idx >= d.length) continue;
-    g.strokeStyle = color; g.lineWidth = 1; g.beginPath(); g.moveTo(x(idx), 4); g.lineTo(x(idx), cy + ch); g.stroke();
+    g.strokeStyle = color; g.lineWidth = 1; g.beginPath(); g.moveTo(px(x(idx)), 4); g.lineTo(px(x(idx)), cy + ch); g.stroke();
   }
-  g.fillStyle = col("--faint"); g.textAlign = "center";
-  const step = Math.max(1, Math.ceil(d.length / 16 / 5) * 5);
-  for (let i = 0; i < Math.max(d.length, 1); i += step) g.fillText(String(i), x(i), cy + ch + 12);
-  if (!d.length) { g.fillStyle = col("--faint"); g.textAlign = "center"; g.font = "13px -apple-system, sans-serif"; g.fillText(S.running ? "waiting for engine tokens…" : "telemetry appears here while the engine streams", W / 2, ay + ah / 2 + 30); }
+  g.fillStyle = col("--muted"); g.textAlign = "center";
+  let tx = xR + 5;
+  for (const i of xt) { g.fillText(String(i), x(i), cy + ch + 12); tx = Math.max(tx, x(i) + g.measureText(String(i)).width / 2 + 5); }
+  if (xt.length) { g.textAlign = "left"; g.font = `italic 11px ${col("--sans")}`; g.fillText("t", tx, cy + ch + 12); }
+  const lbl = d.length ? `Engine telemetry over ${d.length} steps: ${d.filter((t) => t.hinge_layers_clamped > 0).length} hinge clamps, ${d.filter((t) => t.ban_flipped).length} ban flips` : "Engine telemetry: no engine tokens yet";
+  if (cv.getAttribute("aria-label") !== lbl) cv.setAttribute("aria-label", lbl);
+  const emp = d.length && $("#inspector > .empty"), hint = "Click any engine token, or a point on the scope, to see what M1–M4 and the ban did at that step.";
+  if (emp && emp.textContent !== hint) emp.textContent = hint;
+  if (!d.length) {
+    g.fillStyle = col("--faint"); g.textAlign = "center"; g.font = `13px ${col("--sans")}`;
+    const msg = S.running ? "waiting for engine tokens…" : "telemetry appears here while the engine streams", cx = SC.L + plotW / 2, my = ay + ah / 2 + 30;
+    if (g.measureText(msg).width <= plotW - 16) g.fillText(msg, cx, my); else { const w = msg.split(" "), k = Math.ceil(w.length / 2); g.fillText(w.slice(0, k).join(" "), cx, my - 8); g.fillText(w.slice(k).join(" "), cx, my + 9); } // wrap inside the plot at 390
+  }
 }
 
 function axisLabels(g, yf, vals, unit, left, W) {
-  g.fillStyle = "#5d6779"; g.textAlign = left ? "right" : "left";
-  for (const v of vals) g.fillText(`${v}${unit}`, left ? SC.L - 5 : W - SC.R + 5, yf(v) + 3);
+  g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted").trim(); g.textAlign = left ? "right" : "left";
+  for (const v of vals) g.fillText(`${String(v).replace("-", "−")}${unit}`, left ? SC.L - 5 : W - SC.R + 5, yf(v) + 3);
 }
 
 function scopeHover(e) {
@@ -526,11 +733,13 @@ function scopeHover(e) {
   S.hover = i;
   const t = S.scope[i];
   const tip = $("#scope-tip");
-  tip.innerHTML = `<b>${esc(showTok(t.eos ? "<EOS>" : t.s))}</b> · t=${t.t}<br>z ${fmt(t.drift_z)} / κ ${fmt(t.hinge_threshold)}${t.in_boundary_window ? " (boundary)" : ""}<br>` +
-    `init ${fmt(t.init_norm, 1)} · sustain ${fmt(t.sustain_norm, 1)} · cos ${fmt(t.eos_cos)}<br>KL ${fmt(t.step_kl_nats ?? t.lexical_kl_nats, 3)} nats${t.ban_flipped ? " · <span style='color:var(--ban)'>ban flip</span>" : ""}`;
+  tip.innerHTML = `<b>${esc(showTok(t.eos ? "<EOS>" : t.s))}</b> · t=${t.t}${t.ban_flipped ? " · <span style='color:var(--ban)'>ban flip</span>" : ""}<br>z ${fmt(t.drift_z)} / κ ${fmt(t.hinge_threshold)}${t.in_boundary_window ? " (boundary)" : ""}<br>` +
+    `init ${fmt(t.init_norm, 1)} · sustain ${fmt(t.sustain_norm, 1)}<br>cos ${fmt(t.eos_cos)} · KL ${fmt(t.step_kl_nats ?? t.lexical_kl_nats, 3)} nats`; // short lines so it fits beside the cursor at 390
   tip.style.display = "block";
-  tip.style.left = `${Math.min(mx + 12, r.width - 230)}px`;
-  tip.style.top = "8px";
+  // flip left of the cursor past mid-width; bottom-align on track C so track A's data stays clear
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  tip.style.left = `${Math.max(0, Math.min(mx > r.width / 2 ? mx - 12 - tw : mx + 12, r.width - tw))}px`;
+  tip.style.top = `${Math.max(SC.A[0] + SC.A[1] + 4, SC.C[0] + SC.C[1] - th)}px`;
   markHover(i);
   drawScope();
 }
@@ -608,7 +817,10 @@ function inspect(col, idx) {
       ["β_attn · pinned heads", `${pv.beta_attn} · ${pv.pin_heads.length}`],
     ])}<div class="attn-map" style="margin-top:6px">${spans}</div><p class="hint">Shade = mean attention of the ${pv.pin_heads.length} pinned heads at this step; underline = instruction tokens receiving +β (purple = negated target).</p></div>`;
   }
-  $("#inspector").innerHTML = h;
+  const ins = $("#inspector");
+  ins.innerHTML = h;
+  const ir = ins.getBoundingClientRect(); // off-screen (e.g. top ≈ 1179 in a 900px viewport at 1440): bring it into view
+  if (ir.top > innerHeight - 60 || ir.bottom < 60) ins.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
 function probCell(p, after) {
@@ -618,9 +830,11 @@ function probCell(p, after) {
 
 /* ============================== drawer ============================== */
 function initDrawer() {
-  const dr = $("#drawer");
-  $("#open-drawer").addEventListener("click", () => dr.classList.add("open"));
-  $("#close-drawer").addEventListener("click", () => dr.classList.remove("open"));
+  const dr = $("#drawer"), ob = $("#open-drawer");
+  dr.inert = true; ob.setAttribute("aria-controls", "drawer"); ob.setAttribute("aria-expanded", "false");
+  ob.addEventListener("click", () => setDrawer(!dr.classList.contains("open")));
+  $("#close-drawer").addEventListener("click", () => setDrawer(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && dr.classList.contains("open") && (dr.contains(e.target) || e.target === document.body)) setDrawer(false); });
   $$("[data-mod]").forEach((cb) => cb.addEventListener("change", () => { S.opts.modules[cb.dataset.mod] = cb.checked; markOptsDirty(); }));
   const sl = [["#s-kappa", "#o-kappa", "kappa_boundary"], ["#s-gamma", "#o-gamma", "gamma_unembed"], ["#s-beta", "#o-beta", "beta_attn"]];
   for (const [s, o, k] of sl) $(s).addEventListener("input", () => { S.opts[k] = +$(s).value; $(o).textContent = $(s).value; markOptsDirty(); });
@@ -636,11 +850,27 @@ function initDrawer() {
   $("#rerun-engine").addEventListener("click", () => { if (S.cur) run(["engine"]); else toast("Pick a prompt first."); });
 }
 
+/* Non-modal drawer: inert (no tab stops, hidden from AT) while closed; focus goes in on open and back to the opener on close. */
+function setDrawer(open) {
+  const dr = $("#drawer"), ob = $("#open-drawer");
+  if (dr.classList.contains("open") === open) return;
+  const inside = dr.contains(document.activeElement);
+  dr.classList.toggle("open", open);
+  dr.inert = !open;
+  ob.setAttribute("aria-expanded", open);
+  if (open) $("#close-drawer").focus({ preventScroll: true });
+  else if (inside) ob.focus({ preventScroll: true });   // only pull focus back if it was in the drawer
+}
+
 function markOptsDirty() {
   const m = S.opts.modules;
   const def = m.lifecycle && m.boundary_hinge && m.predictor && m.pin_attention && m.unembed_ban && S.opts.kappa_boundary === 1.5 && S.opts.gamma_unembed === 1.5 && S.opts.beta_attn === 0.5;
   $("#cfg-diff").innerHTML = def ? (m.stem ? "Engine = condition 11 + stem morphology (v2.3 demo)." : "Engine = condition 11 exactly (its logged outputs are reproduced byte for byte).") :
     "Custom ablation — press “Re-run engine only”.";
+  const D = { kappa_boundary: 1.5, gamma_unembed: 1.5, beta_attn: 0.5 }; // v2.3 demo defaults (all modules on)
+  const n = Object.values(m).filter((x) => !x).length + Object.keys(D).filter((k) => S.opts[k] !== D[k]).length;
+  $("#open-drawer").textContent = n ? `Ablation controls · ${n} changed` : "Ablation controls";
+  if (typeof markStale === "function") markStale();
 }
 
 function renderCfgDiff(diff) {
@@ -655,8 +885,9 @@ async function loadEconomics() {
   if (!S.loaded.ecoInit) {
     S.loaded.ecoInit = true;
     $("#kl-pool").addEventListener("change", () => { S.eco.pool = $("#kl-pool").value; loadEconomics(); });
-    $$("#budget-switch button").forEach((b) => b.addEventListener("click", () => { S.eco.budget = b.dataset.b; $$("#budget-switch button").forEach((x) => x.classList.toggle("on", x === b)); loadEconomics(); }));
-    $$("#wf-sort button").forEach((b) => b.addEventListener("click", () => { S.eco.sort = b.dataset.s; $$("#wf-sort button").forEach((x) => x.classList.toggle("on", x === b)); loadEconomics(); }));
+    const press = (sel, b) => $$(`${sel} button`).forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b); });
+    $$("#budget-switch button").forEach((b) => b.addEventListener("click", () => { S.eco.budget = b.dataset.b; press("#budget-switch", b); loadEconomics(); }));
+    $$("#wf-sort button").forEach((b) => b.addEventListener("click", () => { S.eco.sort = b.dataset.s; press("#wf-sort", b); loadEconomics(); }));
   }
   renderKpis(eco);
   renderScatter(eco);
@@ -673,29 +904,31 @@ function renderKpis(eco) {
   const eng = rowOf(eco, "11_engine_v2_2_lean"), e10 = rowOf(eco, "10_engine_v2_1"), ins = rowOf(eco, "12_official_instruct_chat"), urial = rowOf(eco, "3_urial_3shot_prefix");
   const wd = eco.weight_delta || {};
   const rec = (k) => eco.recovery[k];
-  const rtxt = (k) => { const r = rec(k); if (!r || r.point == null) return "–"; if (r.undefined_frac > 0.025) return "not resolved"; return `${Math.round(100 * r.point)}%`; };
+  const rtxt = (k) => { const r = rec(k); if (!r || r.point == null) return "–"; if (r.undefined_frac > 0.025) return `<span class="nr">not resolved</span>`; return `${Math.round(100 * r.point)}%`; };
   const rci = (k) => { const r = rec(k); return r && r.lo != null && r.undefined_frac <= 0.025 ? `[${Math.round(100 * r.lo)}%, ${Math.round(100 * r.hi)}%]` : "denominator unresolved"; };
   const kE = eng && eng.kl.heldout_no_negation, kI = ins && ins.kl.heldout_no_negation;
   const mins = eco.calibration_seconds ? `${Math.round(eco.calibration_seconds / 60)} min` : "not recorded";
   const card = (label, ev, es, iv, is) => `<div class="kpi glass"><div class="kpi-label">${label}</div><div class="kpi-vs">
       <div><div class="kpi-v eng">${ev}</div><div class="kpi-s">${es}</div></div><div><div class="kpi-v ins">${iv}</div><div class="kpi-s">${is}</div></div></div></div>`;
-  $("#kpis").innerHTML = [
+  $("#kpis").innerHTML = `<div class="kpi-key"><span><i class="eng"></i>Zero-weight engine</span><span><i class="ins"></i>Official Instruct</span></div>
+    <div class="kpi glass kpi-wide"><div class="kpi-label">Post-training recovery <span class="f">(C_engine − C_raw) / (C_Instruct − C_raw)</span>, paired bootstrap 95% CI</div>
+    <div class="kpi-vs kpi-vs4">
+      <div><div class="kpi-v eng">${rtxt("10_engine_v2_1@512")}</div><div class="kpi-s">v2.1 @ 512 tok ${rci("10_engine_v2_1@512")}</div></div>
+      <div><div class="kpi-v eng">${rtxt("11_engine_v2_2_lean@512")}</div><div class="kpi-s">v2.2 lean @ 512 tok ${rci("11_engine_v2_2_lean@512")}</div></div>
+      <div><div class="kpi-v" style="color:var(--muted)">${rtxt("10_engine_v2_1@160")}</div><div class="kpi-s">v2.1 @ 160 tok · ${rci("10_engine_v2_1@160")}</div></div>
+      <div><div class="kpi-v" style="color:var(--muted)">${rtxt("11_engine_v2_2_lean@160")}</div><div class="kpi-s">v2.2 lean @ 160 tok · Instruct's own gain is not resolved at 160 tokens</div></div>
+    </div></div>` + [
     card("Weights modified", "0%", "engine (hooks only)", pct(100 * (wd.params_changed_frac || 0)), `Instruct · of ${((wd.params || 0) / 1e9).toFixed(2)}B params`),
     card("Disk artifact", fmtBytes(eco.artifact_bytes), "calibration file", fmtBytes(wd.instruct_weights_bytes), `whole checkpoint · ×${Math.round((wd.instruct_weights_bytes || 0) / (eco.artifact_bytes || 1))}`),
     card("One-off cost", mins, "forward passes, 80 prompts, M4 Pro", "SFT + RL", "> 1M SFT examples + multi-stage RL"),
     card("Extra prompt tokens", "0", `URIAL needs ${Math.round(urial ? urial.extra_prompt_tokens : 768)}`, `${Math.round(ins ? ins.extra_prompt_tokens : 0)}`, "chat template + system prompt"),
     card("Tokens per answer @512", eng ? Math.round(eng.avg_tokens_512) : "–", e10 ? `v2.1: ${Math.round(e10.avg_tokens_512)}` : "", ins ? Math.round(ins.avg_tokens_512) : "–", eng && ins ? `${(ins.avg_tokens_512 / eng.avg_tokens_512).toFixed(1)}× longer` : ""),
     card("KL tax (held-out, no-neg.)", kE ? fmt(kE.mean_kl, 3) : "–", kE ? `nats/token · top-1 ${pct(100 * kE.top1_agree)}` : "", kI ? fmt(kI.mean_kl, 3) : "–", kE && kI ? `${(kI.mean_kl / kE.mean_kl).toFixed(0)}× more · top-1 ${pct(100 * kI.top1_agree)}` : ""),
-  ].join("") + `<div class="kpi glass" style="grid-column: 1 / -1"><div class="kpi-label">Post-training recovery (C_engine − C_raw) / (C_Instruct − C_raw), paired bootstrap 95% CI</div>
-    <div class="kpi-vs" style="grid-template-columns: repeat(4, 1fr)">
-      <div><div class="kpi-v eng">${rtxt("10_engine_v2_1@512")}</div><div class="kpi-s">v2.1 @ 512 tok ${rci("10_engine_v2_1@512")}</div></div>
-      <div><div class="kpi-v eng">${rtxt("11_engine_v2_2_lean@512")}</div><div class="kpi-s">v2.2 lean @ 512 tok ${rci("11_engine_v2_2_lean@512")}</div></div>
-      <div><div class="kpi-v" style="color:var(--muted)">${rtxt("10_engine_v2_1@160")}</div><div class="kpi-s">v2.1 @ 160 tok · ${rci("10_engine_v2_1@160")}</div></div>
-      <div><div class="kpi-v" style="color:var(--muted)">${rtxt("11_engine_v2_2_lean@160")}</div><div class="kpi-s">v2.2 lean @ 160 tok · Instruct's own gain is not resolved at 160 tokens</div></div>
-    </div></div>`;
+  ].join("");
 }
 
 const KIND_COLOR = { base: "#94a3b8", prompt: "#fbbf24", steer: "#fb923c", engine: "#2dd4bf", instruct: "#8b9cfb" };
+const KIND_LABEL = { base: "Raw base", prompt: "Prompting (URIAL)", steer: "Static steering (CAA)", engine: "Zero-weight engine", instruct: "Post-trained (Instruct)" };
 const POOL_LABEL = { heldout_no_negation: "held-out, no-negation prompts", heldout_all: "held-out, all prompts", calibration_no_negation: "calibration, no-negation", calibration_all: "calibration, all prompts" };
 
 function renderScatter(eco) {
@@ -717,25 +950,43 @@ function renderScatter(eco) {
   s += `<text transform="translate(14 ${(T + H - B) / 2}) rotate(-90)" text-anchor="middle">Composite at ${budget} tokens (%)</text>`;
   const eng = pts.find((p) => p.r.condition === "11_engine_v2_2_lean") || pts.find((p) => p.r.condition === "10_engine_v2_1");
   const ins = pts.find((p) => p.r.condition === "12_official_instruct_chat");
+  const mc = (renderScatter._mc ||= document.createElement("canvas").getContext("2d"));
+  mc.font = `12px ${getComputedStyle($("#scatter")).fontFamily}`;
+  const placed = [], bub = [], labs = [], tw = (t) => mc.measureText(t).width + 2; // obstacle boxes {x0,x1,y0,y1}; tw = width of 12px label text
+  let seg = []; // points sampled along the annotation arrow, so labels can dodge it
   if (eng && ins && eng.x > 0) {
+    const note = `${(ins.x / eng.x).toFixed(0)}× less distortion, ${eng.y >= ins.y ? "+" : ""}${(eng.y - ins.y).toFixed(1)} Composite`, ax = (X(ins.x) + X(eng.x)) / 2, ay = Math.min(Y(ins.y), Y(eng.y)) - 12;
+    placed.push({ x0: ax - tw(note) / 2, x1: ax + tw(note) / 2, y0: ay - 10, y1: ay + 3 });
+    const [sx, sy, ex, ey] = [X(ins.x) - 18, Y(ins.y) + 6, X(eng.x) + 16, Y(eng.y) + 4], n = Math.ceil(Math.hypot(ex - sx, ey - sy) / 3);
+    seg = Array.from({ length: n + 1 }, (_, i) => [sx + ((ex - sx) * i) / n, sy + ((ey - sy) * i) / n]);
     s += `<line x1="${X(ins.x) - 18}" y1="${Y(ins.y) + 6}" x2="${X(eng.x) + 16}" y2="${Y(eng.y) + 4}" stroke="rgba(226,232,240,0.35)" stroke-dasharray="3 3" marker-end="url(#arr)"/>
       <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="rgba(226,232,240,0.5)"/></marker></defs>
-      <text class="lbl" x="${(X(ins.x) + X(eng.x)) / 2}" y="${Math.min(Y(ins.y), Y(eng.y)) - 12}" text-anchor="middle">${(ins.x / eng.x).toFixed(0)}× less distortion, ${eng.y >= ins.y ? "+" : ""}${(eng.y - ins.y).toFixed(1)} Composite</text>`;
+      <text class="lbl val" x="${ax}" y="${ay}" text-anchor="middle">${note}</text>`;
   }
-  const placed = [];
   for (const p of pts.sort((a, b) => (b.r.bytes || 0) - (a.r.bytes || 0))) {
     const rr = 5 + 3 * Math.log10(1 + (p.r.bytes || 0) / 1e6);
     const cx = X(p.x), cy = Y(p.y);
-    s += `<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${KIND_COLOR[p.r.kind]}" fill-opacity="0.28" stroke="${KIND_COLOR[p.r.kind]}" stroke-width="1.5"><title>${esc(p.r.label)}: KL ${fmt(p.x, 3)}, top-1 ${pct(100 * p.top1)}, Composite ${fmt(p.y, 1)}, ${fmtBytes(p.r.bytes) === "–" ? "no weights" : fmtBytes(p.r.bytes)}</title></circle>`;
-    let ly = cy - rr - 5;
-    while (placed.some((q) => Math.abs(q.y - ly) < 13 && Math.abs(q.x - cx) < 120)) ly -= 13;
-    placed.push({ x: cx, y: ly });
-    const anchor = cx > W - 170 ? "end" : "start";
-    s += `<text class="lbl" x="${cx + (anchor === "end" ? -rr : rr) * 0.3}" y="${ly}" text-anchor="${anchor}">${esc(p.r.label)} <tspan class="lbl dim">${fmt(p.y, 1)}%</tspan></text>`;
+    s += `<circle class="halo" cx="${cx}" cy="${cy}" r="${rr + 2}"/><circle cx="${cx}" cy="${cy}" r="${rr}" fill="${KIND_COLOR[p.r.kind]}" fill-opacity="0.28" stroke="${KIND_COLOR[p.r.kind]}" stroke-width="1.5"><title>${esc(p.r.label)}: KL ${fmt(p.x, 3)}, top-1 ${pct(100 * p.top1)}, Composite ${fmt(p.y, 1)}, ${fmtBytes(p.r.bytes) === "–" ? "no weights" : fmtBytes(p.r.bytes)}</title></circle>`;
+    bub.push({ p, rr, cx, cy });
+    placed.push({ x0: cx - rr - 2, x1: cx + rr + 2, y0: cy - rr - 2, y1: cy + rr + 2 });
+  }
+  // labels right of each bubble (left near the edge), placed top→bottom; a label nudges ±13 px to clear labels, bubbles and the
+  // arrow, but never above the label of a higher point, so label order matches point order. A moved label gets a leader.
+  const hit = (b) => placed.some((q) => q.x0 < b.x1 && b.x0 < q.x1 && q.y0 < b.y1 && b.y0 < q.y1) || seg.some(([x, y]) => x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1);
+  for (const { p, rr, cx, cy } of [...bub].sort((a, b) => a.cy - b.cy)) {
+    const w = tw(`${p.r.label} ${fmt(p.y, 1)}%`), end = cx + rr + 6 + w > W - 4;
+    const lx = end ? cx - rr - 6 : cx + rr + 6, x0 = end ? lx - w : lx, x1 = end ? lx : lx + w, box = (y) => ({ x0, x1, y0: y - 10, y1: y + 3 });
+    const ok = (y) => y > T + 6 && y < H - B - 2 && !labs.some((q) => q.x0 < x1 && x0 < q.x1 && q.ly > y) && !hit(box(y));
+    const ly = [0, -6.5, 6.5, -13, 13, -19.5, 19.5, -26, 26, 32.5, 39, 45.5, 52, 65, 78, 91].map((d) => cy + 4 + d).find(ok) ?? cy + 4;
+    placed.push(box(ly)); labs.push({ x0, x1, ly });
+    if (Math.abs(ly - cy - 4) > 4) s += `<line class="lead" x1="${end ? cx - rr : cx + rr}" y1="${cy}" x2="${end ? lx + 2 : lx - 2}" y2="${ly - 4}"/>`;
+    s += `<text class="lbl val" x="${lx}" y="${ly}" text-anchor="${end ? "end" : "start"}">${esc(p.r.label)} <tspan class="lbl dim">${fmt(p.y, 1)}%</tspan></text>`;
   }
   s += `</svg>`;
   $("#scatter").innerHTML = s;
-  $("#scatter-note").textContent = `Bubble area ~ log(bytes changed or shipped). ${missing.length ? `Not shown (no ${budget === "512" ? "512-token run" : "KL measurement"}): ${missing.join(", ")}.` : ""} ${eco.kl_note}`;
+  const kinds = Object.keys(KIND_LABEL).filter((k) => pts.some((p) => p.r.kind === k));
+  $("#scatter-key").innerHTML = kinds.map((k) => `<span><i style="--c:${KIND_COLOR[k]}"></i>${KIND_LABEL[k]}</span>`).join("");
+  $("#scatter-note").textContent = `Bubble radius ∝ log₁₀ of the MB changed or shipped. ${missing.length ? `Not shown (no ${budget === "512" ? "512-token run" : "KL measurement"}): ${missing.join(", ")}.` : ""} ${eco.kl_note}`;
 }
 
 function niceTicks(max) {
@@ -787,7 +1038,9 @@ function renderUnitTable(eco) {
   $("#recovery-note").textContent = `Recovery vs. Instruct (chat): ${rec}. tok/s: same-session benchmark where available, otherwise from the logs.`;
 }
 
-const GROUP_COLOR = { "Baselines": "#94a3b8", "Phase 1 · v1": "#fb923c", "Phase 2 · v2": "#fbbf24", "Phase 3 · v2.1": "#4ade80", "Phase 4 · lean": "#2dd4bf", "Phase 4 · post-trained": "#8b9cfb" };
+const GROUP_COLOR = { "Baselines": "#94a3b8", "Phase 1 · v1": "#0f766e", "Phase 2 · v2": "#0d9488", "Phase 3 · v2.1": "#14b8a6", "Phase 4 · lean": "#2dd4bf", "Phase 4 · post-trained": "#8b9cfb" };
+// baseline rows take their approach colour (raw slate, URIAL amber, CAA orange); engine phases ride an ordinal teal ramp
+const wfColor = (r) => (r.group === "Baselines" ? (/urial/.test(r.condition) ? KIND_COLOR.prompt : /caa/.test(r.condition) ? KIND_COLOR.steer : KIND_COLOR.base) : GROUP_COLOR[r.group] || KIND_COLOR.base);
 
 function renderWaterfall(ab) {
   let rows = [...ab.rows];
@@ -799,21 +1052,25 @@ function renderWaterfall(ab) {
   let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
   for (let v = Math.ceil(lo / 5) * 5; v <= hi; v += 5) s += `<g class="grid"><line x1="${X(v)}" x2="${X(v)}" y1="${T - 6}" y2="${H - 22}"/></g><text x="${X(v)}" y="${H - 8}" text-anchor="middle">${v}</text>`;
   s += `<line x1="${X(raw)}" x2="${X(raw)}" y1="${T - 10}" y2="${H - 22}" stroke="#e2e8f0" stroke-dasharray="3 3"/><text class="lbl" x="${X(raw) + 4}" y="${T - 10}">raw base ${fmt(raw, 1)}</text>`;
+  let wsk = "", chev = "";
   rows.forEach((r, i) => {
     const y = T + i * rowH;
-    const c = GROUP_COLOR[r.group] || "#94a3b8";
+    const c = wfColor(r);
     const x0 = X(Math.min(raw, r.composite)), x1 = X(Math.max(raw, r.composite));
-    s += `<text class="lbl${r.instruct ? "" : ""}" x="${L - 8}" y="${y + 13}" text-anchor="end">${esc(r.label)}</text>`;
+    s += `<text class="lbl${/^1[01]_|^12_official_instruct_chat$/.test(r.condition) ? " key" : ""}" x="${L - 8}" y="${y + 13}" text-anchor="end">${esc(r.label)}</text>`;
     s += `<rect x="${x0}" y="${y + 3}" width="${Math.max(x1 - x0, 1.5)}" height="13" rx="2" fill="${c}" fill-opacity="${r.composite >= raw ? 0.8 : 0.35}"><title>${r.condition}: ${fmt(r.composite, 1)} (Δ ${fmt(r.delta_vs_raw, 1)}, 95% CI [${fmt(r.ci_vs_raw[0], 1)}, ${fmt(r.ci_vs_raw[1], 1)}])</title></rect>`;
     if (r.condition !== "1_raw_base") {
       const a = X(raw + r.ci_vs_raw[0]), b = X(raw + r.ci_vs_raw[1]);
-      s += `<line x1="${a}" x2="${b}" y1="${y + 9.5}" y2="${y + 9.5}" stroke="#e2e8f0" stroke-opacity="0.75"/><line x1="${a}" x2="${a}" y1="${y + 6}" y2="${y + 13}" stroke="#e2e8f0" stroke-opacity="0.75"/><line x1="${b}" x2="${b}" y1="${y + 6}" y2="${y + 13}" stroke="#e2e8f0" stroke-opacity="0.75"/>`;
+      wsk += `<line x1="${a}" x2="${b}" y1="${y + 9.5}" y2="${y + 9.5}"/><line x1="${a}" x2="${a}" y1="${y + 6}" y2="${y + 13}"/><line x1="${b}" x2="${b}" y1="${y + 6}" y2="${y + 13}"/>`;
+      if (raw + r.ci_vs_raw[1] > hi) chev += `<text class="chev" x="${W - R - 5}" y="${y + 14}" text-anchor="middle"><title>CI runs past 100</title>›</text>`;
     }
-    s += `<text x="${W - R + 8}" y="${y + 13}">${fmt(r.composite, 1)} <tspan fill="${r.delta_vs_raw > 0 ? "#34d399" : r.delta_vs_raw < 0 ? "#f87171" : "#8d97aa"}">${r.condition === "1_raw_base" ? "" : (r.delta_vs_raw >= 0 ? "+" : "") + fmt(r.delta_vs_raw, 1)}</tspan></text>`;
+    s += `<text class="val" x="${W - R + 8}" y="${y + 13}">${fmt(r.composite, 1)} <tspan class="${r.delta_vs_raw > 0 ? "up" : r.delta_vs_raw < 0 ? "dn" : ""}">${r.condition === "1_raw_base" ? "" : (r.delta_vs_raw >= 0 ? "+" : "") + fmt(r.delta_vs_raw, 1)}</tspan></text>`;
   });
-  s += `</svg>`;
+  // whiskers are clipped to the plot so CIs past 100 cannot run into the value column; a › marks the clipped end
+  s += `<defs><clipPath id="wf-plot"><rect x="${L}" y="0" width="${W - L - R}" height="${H}"/></clipPath></defs><g class="wsk" clip-path="url(#wf-plot)">${wsk}</g>${chev}</svg>`;
   $("#waterfall").innerHTML = s;
-  $("#wf-note").textContent = `${ab.model}: bar = Composite relative to the raw base; whisker = 95% paired-bootstrap CI of the difference (CIs that cross the dashed line are not resolved). Colours: ${Object.keys(GROUP_COLOR).join(" · ")}. ${ab.note}`;
+  const sw = [["raw", KIND_COLOR.base], ["URIAL", KIND_COLOR.prompt], ["CAA", KIND_COLOR.steer], ...Object.entries(GROUP_COLOR).slice(1)];
+  $("#wf-note").innerHTML = `<span class="wf-key">${sw.map(([l, c]) => `<span><i style="background:${c}"></i>${esc(l)}</span>`).join("")}</span>${esc(ab.model)}: bar = Composite relative to the raw base (faded = below it); whisker = 95% paired-bootstrap CI of the difference (CIs that cross the dashed line are not resolved; › = CI runs past 100). ${esc(ab.note)}`;
 }
 
 function renderAblationTable(ab) {
@@ -823,8 +1080,8 @@ function renderAblationTable(ab) {
   let rows = [...ab.rows];
   const val = (r, k) => (k.startsWith("cat:") ? r.categories[k.slice(4)] : r[k]);
   if (st.k) rows.sort((a, b) => { const va = val(a, st.k), vb = val(b, st.k); const c = typeof va === "string" ? va.localeCompare(vb) : (va ?? -1) - (vb ?? -1); return st.asc ? c : -c; });
-  const heat = (v) => v == null ? "–" : `<span class="heat" style="background:rgba(${v >= 90 ? "52,211,153" : v >= 75 ? "251,191,36" : "248,113,113"},${(0.08 + 0.25 * Math.abs(v - 70) / 30).toFixed(2)})">${fmt(v, 0)}</span>`;
-  const head = `<tr>${cols.map(([k, l, cls]) => `<th data-k="${k}" class="${cls || ""}${st.k === k ? ` sorted${st.asc ? " asc" : ""}` : ""}">${l}</th>`).join("")}</tr>`;
+  const heat = (v) => v == null ? "–" : `<span class="heat" style="background:rgba(226,232,240,${(0.04 + 0.28 * Math.min(1, Math.max(0, (v - 60) / 40))).toFixed(2)})">${fmt(v, 0)}</span>`;
+  const head = `<tr>${cols.map(([k, l, cls]) => `<th data-k="${k}" class="${cls || ""}${st.k === k ? ` sorted${st.asc ? " asc" : ""}` : ""}"${st.k === k ? ` aria-sort="${st.asc ? "ascending" : "descending"}"` : ""}><button type="button" class="th-sort">${l}</button></th>`).join("")}</tr>`;
   const body = rows.map((r) => `<tr class="${r.group.includes("lean") || r.condition === "10_engine_v2_1" ? "row-eng" : r.instruct ? "row-ins" : ""}">
     <td>${esc(r.label)} <span class="grp mono">${r.condition}</span></td><td class="l grp">${esc(r.group)}</td><td class="num"><b>${fmt(r.composite, 1)}</b></td>
     <td class="num">${r.condition === "1_raw_base" ? "–" : `${r.delta_vs_raw >= 0 ? "+" : ""}${fmt(r.delta_vs_raw, 1)} [${fmt(r.ci_vs_raw[0], 1)}, ${fmt(r.ci_vs_raw[1], 1)}]`}</td>
@@ -837,6 +1094,7 @@ function renderAblationTable(ab) {
     const k = th.dataset.k;
     S.eco.tableSort = { k, asc: st.k === k ? !st.asc : false };
     renderAblationTable(ab);
+    $(`th[data-k="${k}"] .th-sort`, t).focus();
   }));
 }
 
@@ -846,9 +1104,9 @@ const DEFAULT_CONDS = ["1_raw_base", "4_static_caa", "10_engine_v2_1", "11_engin
 async function loadBrowser() {
   if (!S.prompts) await api("/api/prompts");
   const tags = [["test40", "protocol · 160 tok"], ["test40_512tok", "512 tok"], ["test40_sdpa", "SDPA"]];
-  $("#tag-switch").innerHTML = tags.map(([t, l]) => `<button data-t="${t}" class="${S.br.tag === t ? "on" : ""}">${l}</button>`).join("");
+  $("#tag-switch").innerHTML = tags.map(([t, l]) => `<button type="button" data-t="${t}" class="${S.br.tag === t ? "on" : ""}" aria-pressed="${S.br.tag === t}">${l}</button>`).join("");
   $$("#tag-switch button").forEach((b) => b.addEventListener("click", () => { S.br.tag = b.dataset.t; S.br.conds = null; loadBrowser(); }));
-  $("#cat-chips").innerHTML = [["all", "All"], ...Object.entries(CAT_LABEL)].map(([k, l]) => `<button class="cchip${S.br.cat === k ? " on" : ""}" data-c="${k}">${l}</button>`).join("");
+  $("#cat-chips").innerHTML = [["all", "All"], ...Object.entries(CAT_LABEL)].map(([k, l]) => `<button type="button" class="cchip${S.br.cat === k ? " on" : ""}" data-c="${k}" aria-pressed="${S.br.cat === k}">${l}</button>`).join("");
   $$("#cat-chips .cchip").forEach((b) => b.addEventListener("click", () => { S.br.cat = b.dataset.c; loadBrowser(); }));
   if (!S.loaded.brInit) {
     S.loaded.brInit = true;
@@ -861,11 +1119,11 @@ async function loadBrowser() {
   if (!S.br.conds) S.br.conds = DEFAULT_CONDS.filter((c) => avail.includes(c));
   if (!S.br.conds.length) S.br.conds = avail.slice(0, 4);
   $("#cond-chips").innerHTML = `<span class="hint" style="margin-right:6px">Conditions (${avail.length} logged for ${esc(lg.tag_label)}):</span>` + avail.map((c) =>
-    `<button class="cchip${c.startsWith("12_") || c.startsWith("13_") ? " ins" : ""}${S.br.conds.includes(c) ? " on" : ""}" data-c="${c}" title="${esc(lg.labels[c] || c)}">${c}</button>`).join("");
+    `<button type="button" class="cchip${c.startsWith("12_") || c.startsWith("13_") ? " ins" : ""}${S.br.conds.includes(c) ? " on" : ""}" data-c="${c}" aria-pressed="${S.br.conds.includes(c)}" title="${esc(lg.labels[c] || c)}">${c}</button>`).join("");
   $$("#cond-chips .cchip").forEach((b) => b.addEventListener("click", () => {
-    const c = b.dataset.c;
-    S.br.conds = S.br.conds.includes(c) ? S.br.conds.filter((x) => x !== c) : [...S.br.conds, c];
-    b.classList.toggle("on");
+    const c = b.dataset.c, on = !S.br.conds.includes(c);
+    S.br.conds = avail.filter((x) => (x === c ? on : S.br.conds.includes(x))); // keep chip order, so list squares and cards follow it
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on);
     renderBrList();
     renderBrDetail();
   }));
@@ -882,11 +1140,15 @@ function renderBrList() {
     if (S.br.disagree) { const cs = new Set(brRecs(p.id).map(([, r]) => r.metrics.composite)); if (cs.size < 2) return false; }
     return true;
   });
-  $("#br-list").innerHTML = items.map((p) => `<div class="br-item${S.br.pid === p.id ? " on" : ""}" data-pid="${p.id}">
+  $("#br-list").innerHTML = items.map((p) => { const rs = brRecs(p.id); return `<div class="br-item${S.br.pid === p.id ? " on" : ""}" data-pid="${p.id}" role="button" tabindex="0" aria-pressed="${S.br.pid === p.id}">
       <div class="top"><span><span class="pid">${p.id}</span> <span class="cat">${CAT_LABEL[p.category]}</span></span>
-      <span class="outcomes">${brRecs(p.id).map(([c, r]) => `<span class="oc ${r.metrics.composite === 1 ? "pass" : r.metrics.composite >= 0.75 ? "part" : "fail"}" title="${c}: ${(100 * r.metrics.composite).toFixed(0)}%"></span>`).join("")}</span></div>
-      <div class="ins-txt">${esc(p.instruction)}</div></div>`).join("") || `<div class="empty">No prompt matches.</div>`;
-  $$("#br-list .br-item").forEach((el) => el.addEventListener("click", () => { S.br.pid = el.dataset.pid; renderBrList(); renderBrDetail(); }));
+      <span class="outcomes" role="img" aria-label="${rs.map(([c, r]) => `${c} ${(100 * r.metrics.composite).toFixed(0)}%`).join(", ")}">${rs.map(([c, r]) => `<span class="oc ${r.metrics.composite === 1 ? "pass" : r.metrics.composite >= 0.75 ? "part" : "fail"}" title="${c}: ${(100 * r.metrics.composite).toFixed(0)}%"></span>`).join("")}</span></div>
+      <div class="ins-txt">${esc(p.instruction)}</div></div>`; }).join("") || `<div class="empty">No prompt matches.</div>`;
+  $$("#br-list .br-item").forEach((el) => el.addEventListener("click", () => {
+    const f = document.activeElement === el;
+    S.br.pid = el.dataset.pid; renderBrList(); renderBrDetail();
+    if (f) $(`#br-list .br-item[data-pid="${S.br.pid}"]`)?.focus({ preventScroll: true }); // the list re-renders; keep keyboard focus on the chosen item
+  }));
 }
 
 function highlight(text, contam, stems) {
@@ -907,7 +1169,8 @@ function renderBrDetail() {
   const checks = p.checks.map((c) => c.type).join(", ");
   const recs = brRecs(pid);
   box.innerHTML = `<div class="br-head"><div><h2>${esc(p.instruction)}</h2><div class="hint"><span class="pid">${pid}</span> ${CAT_LABEL[p.category]} · checks: ${esc(checks)}${p.stems.length ? ` · banned stems: ${p.stems.join(", ")}` : ""}</div></div>
-    <button class="btn primary" id="br-rerun">Re-run live in Arena →</button></div>
+    <div class="br-run"><button type="button" class="btn primary" id="br-rerun">Run ${pid} live in Arena ▶</button>
+      <div class="hint">Arena: raw · CAA · engine v2.3 · Instruct · eager · ${S.br.tag === "test40_512tok" ? 512 : 160} tok${S.br.tag === "test40_sdpa" ? " · live runs use eager attention" : ""}</div></div></div>
     <div class="br-cards">${recs.map(([c, r]) => {
       const m = r.metrics;
       const b = (ok, l) => `<span class="badge ${ok ? "pass" : "fail"}">${l} ${ok ? "✔" : "✘"}</span>`;
@@ -918,7 +1181,8 @@ function renderBrDetail() {
     }).join("") || `<div class="empty">None of the selected conditions has a log for this prompt.</div>`}</div>`;
   $("#br-rerun").addEventListener("click", () => {
     showView("arena");
-    if (S.br.tag === "test40_512tok") { S.maxNew = 512; $$("#tok-switch button").forEach((x) => x.classList.toggle("on", x.dataset.n === "512")); }
+    S.maxNew = S.br.tag === "test40_512tok" ? 512 : 160;
+    $$("#tok-switch button").forEach((x) => { x.classList.toggle("on", +x.dataset.n === S.maxNew); if (x.hasAttribute("aria-pressed")) x.setAttribute("aria-pressed", +x.dataset.n === S.maxNew); });
     choosePrompt(pid, true);
   });
 }

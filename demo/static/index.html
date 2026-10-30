@@ -12,18 +12,18 @@
     <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div>
       <div class="brand-title">Frozen Assistant Studio</div>
-      <div class="brand-sub">zero-weight-update engine vs. post-training</div>
+      <div class="brand-sub">zero-weight-update engine vs. post&#8209;training</div>
     </div>
   </div>
-  <nav class="tabs" role="tablist">
-    <button class="tab active" data-view="arena" role="tab">Live Arena &amp; X-Ray</button>
-    <button class="tab" data-view="economics" role="tab">Alignment Tax &amp; Economics</button>
-    <button class="tab" data-view="browser" role="tab">Benchmark Browser</button>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button type="button" class="tab active" data-view="arena" role="tab" id="tab-arena" aria-controls="view-arena" aria-selected="true">Live Arena &amp; X&#8209;Ray</button>
+    <button type="button" class="tab" data-view="economics" role="tab" id="tab-economics" aria-controls="view-economics" aria-selected="false" tabindex="-1">Alignment Tax &amp; Economics</button>
+    <button type="button" class="tab" data-view="browser" role="tab" id="tab-browser" aria-controls="view-browser" aria-selected="false" tabindex="-1">Benchmark Browser</button>
   </nav>
   <div class="top-right">
-    <div class="seg" id="model-switch" title="Base model family">
-      <button data-model="3B" class="on">Qwen2.5-3B</button>
-      <button data-model="1.5B">1.5B</button>
+    <div class="seg" id="model-switch" title="Base model family" role="group" aria-label="Base model">
+      <button type="button" data-model="3B" class="on" aria-pressed="true">Qwen2.5-3B</button>
+      <button type="button" data-model="1.5B" aria-pressed="false">1.5B</button>
     </div>
     <div class="delta-meter" id="delta-meter" title="What each approach changes in the model">
       <div class="dm-row"><span class="dm-label eng">Engine hook</span><span class="dm-bar"><i class="eng" style="width:0.5%"></i></span><span class="dm-val" id="dm-eng">3.0 MB · 0% weights</span></div>
@@ -39,55 +39,55 @@
 
 <main>
 <!-- ============================ ARENA ============================ -->
-<section class="view active" id="view-arena">
+<section class="view active" id="view-arena" role="tabpanel" aria-labelledby="tab-arena">
   <aside class="sidebar">
-    <div class="side-head">Killer scenarios <span class="hint">logged outcome per column: R · C · E · I</span></div>
+    <div class="side-head">Killer scenarios <span class="hint">Logged @160&nbsp;tok · R&nbsp;raw · C&nbsp;CAA · E&nbsp;engine&nbsp;(cond&nbsp;11) · I&nbsp;Instruct · filled&nbsp;=&nbsp;pass, hollow&nbsp;=&nbsp;fail</span></div>
     <div id="presets" class="presets"></div>
-    <div class="side-head">All 40 test prompts</div>
+    <label class="side-head" for="prompt-select">All 40 test prompts</label>
     <select id="prompt-select" class="input"></select>
-    <div class="side-head">Custom prompt</div>
+    <label class="side-head" for="custom-prompt">Custom prompt</label>
     <textarea id="custom-prompt" class="input" rows="3" placeholder="e.g. Describe the moon without using the word 'light'."></textarea>
-    <button class="btn ghost" id="use-custom">Use custom prompt</button>
+    <button type="button" class="btn ghost" id="use-custom">Run custom prompt ▶</button>
   </aside>
 
   <div class="arena-main">
     <div class="run-bar glass">
       <div class="prompt-line"><span class="pid" id="cur-pid">–</span><span id="cur-prompt" class="cur-prompt">Pick a scenario on the left.</span></div>
       <div class="run-controls">
-        <div class="seg small" id="tok-switch" title="max_new_tokens"><button data-n="160" class="on">160 tok</button><button data-n="512">512 tok</button></div>
+        <div class="seg small" id="tok-switch" role="group" aria-label="Token budget (max_new_tokens)" title="max_new_tokens"><button type="button" data-n="160" class="on" aria-pressed="true">160 tok</button><button type="button" data-n="512" aria-pressed="false">512 tok</button></div>
         <label class="chk" title="One extra unsteered forward pass per token for the engine and the banned Instruct column"><input type="checkbox" id="exact-kl" checked> exact step-KL</label>
-        <label class="chk" title="Stream every column from the cached benchmark logs (no GPU, benchmark prompts only)"><input type="checkbox" id="replay"> replay logs</label>
+        <label class="chk" title="Streams cached outputs where a log exists (raw, CAA, Instruct; engine only at 'Exactly condition 11'). Other columns run live."><input type="checkbox" id="replay"> replay logs</label>
         <button class="btn ghost" id="open-drawer">Ablation controls</button>
         <button class="btn primary" id="run-btn">Run 4-way ▶</button>
         <button class="btn danger" id="stop-btn" disabled>Stop</button>
       </div>
     </div>
-    <div class="status-line" id="status-line"></div>
+    <div class="status-line" id="status-line" role="status"></div>
 
     <div class="cards" id="cards">
       <article class="card" data-col="raw">
-        <header><span class="dot raw"></span><span class="card-title">Raw base (unsteered)</span><span class="chip" data-role="cond">cond 1</span></header>
+        <header><span class="dot raw"></span><span class="card-title">Raw base (unsteered)</span><button type="button" class="chip stale-chip" data-role="stale" hidden>settings changed · re-run</button><b class="card-score" data-role="score"></b><span class="chip" data-role="cond">cond 1</span></header>
         <div class="card-sub">frozen Qwen2.5 base · bare <code>Question/Answer</code> frame · no stop strings</div>
         <div class="stream" data-role="stream"></div>
         <footer data-role="badges"></footer>
       </article>
       <article class="card" data-col="caa">
-        <header><span class="dot caa"></span><span class="card-title">Static steering (CAA)</span><span class="chip" data-role="cond">cond 4</span></header>
+        <header><span class="dot caa"></span><span class="card-title">Static steering (CAA)</span><button type="button" class="chip stale-chip" data-role="stale" hidden>settings changed · re-run</button><b class="card-score" data-role="score"></b><span class="chip" data-role="cond">cond 4</span></header>
         <div class="card-sub">one contrastive vector added at every position</div>
         <div class="stream" data-role="stream"></div>
         <footer data-role="badges"></footer>
       </article>
       <article class="card hero" data-col="engine">
-        <header><span class="dot eng"></span><span class="card-title" data-role="title">Zero-weight-update engine</span><span class="chip eng" data-role="cond">v2.3 demo</span></header>
-        <div class="card-sub">3.0 MB hook on the same frozen weights · <span class="legend"><i class="lg init"></i>init pulse <i class="lg hinge"></i>hinge clamp <i class="lg ban"></i>ban flip <i class="lg guard"></i>stem guard</span></div>
+        <header><span class="dot eng"></span><span class="card-title" data-role="title">Zero-weight-update engine</span><button type="button" class="chip stale-chip" data-role="stale" hidden>settings changed · re-run</button><b class="card-score" data-role="score"></b><span class="chip eng" data-role="cond">v2.3 demo</span></header>
+        <div class="card-sub"><span data-role="hook">3.0 MB</span> hook on the same frozen weights ·<span class="legend"><i class="lg init"></i>init pulse <i class="lg hinge"></i>hinge clamp <i class="lg ban"></i>ban flip <i class="lg guard"></i>stem guard</span></div>
         <div class="stream" data-role="stream"></div>
         <footer data-role="badges"></footer>
       </article>
       <article class="card" data-col="instruct">
-        <header><span class="dot ins"></span><span class="card-title" data-role="title">Official Instruct (post-trained)</span>
-          <label class="switch" title="Attach the zero-training sibling-orthogonal ban (condition 13)"><input type="checkbox" id="instruct-ban"><span class="slider"></span><span class="sw-label">+ our ban</span></label>
+        <header><span class="dot ins"></span><span class="card-title" data-role="title">Official Instruct (post-trained)</span><button type="button" class="chip stale-chip" data-role="stale" hidden>settings changed · re-run</button><b class="card-score" data-role="score"></b>
+          <label class="switch" title="Attach the zero-training sibling-orthogonal ban (condition 13; with stem morphology on it is cond 13 + stem ban, not logged)"><input type="checkbox" id="instruct-ban" role="switch"><span class="slider"></span><span class="sw-label">+ our ban</span></label>
         </header>
-        <div class="card-sub"><span data-role="isub">6.17 GB checkpoint · chat template</span> · <select id="instruct-frame" class="mini-select"><option value="chat">chat template</option><option value="bare">bare frame</option></select></div>
+        <div class="card-sub"><span data-role="isub"><span data-role="ckpt">6.17 GB</span> checkpoint<span data-role="icond"> · cond 12</span></span> · <select id="instruct-frame" class="mini-select" aria-label="Instruct prompt frame"><option value="chat">chat template</option><option value="bare">bare frame</option></select></div>
         <div class="stream" data-role="stream"></div>
         <footer data-role="badges"></footer>
       </article>
@@ -103,17 +103,19 @@
           <span><i class="ln sus"></i>‖sustain‖</span>
           <span><i class="ln eos"></i>cos(h, μ_eos)</span>
           <span><i class="ln kl"></i>step KL (nats)</span>
+          <span><i class="ln ban"></i>ban flip</span>
+          <span><i class="ln bnd"></i>boundary window</span>
         </div>
       </div>
       <div class="xray-body">
-        <div class="scope-wrap"><canvas id="scope"></canvas><div class="scope-tip" id="scope-tip"></div></div>
+        <div class="scope-wrap"><canvas id="scope" role="img" aria-label="Engine telemetry: no engine tokens yet"></canvas><div class="scope-tip" id="scope-tip"></div></div>
         <div class="inspector" id="inspector"><div class="empty">Run a prompt, then click any engine token.</div></div>
       </div>
     </section>
   </div>
 
-  <div class="drawer" id="drawer" aria-hidden="true">
-    <div class="drawer-head"><b>Live ablation controls</b><button class="x" id="close-drawer" aria-label="Close">×</button></div>
+  <div class="drawer" id="drawer" role="dialog" aria-labelledby="drawer-title" inert>
+    <div class="drawer-head"><b id="drawer-title">Live ablation controls</b><button type="button" class="x" id="close-drawer" aria-label="Close ablation controls">×</button></div>
     <p class="hint">Apply to the engine column (stem and γ also apply to the Instruct ban). Defaults = condition 11 + stem morphology. Coefficients were frozen on the 1.5B dev set.</p>
     <div class="mods">
       <label><input type="checkbox" data-mod="lifecycle" checked> <b>M1</b> Lifecycle (init/sustain + completion stop)</label>
@@ -124,9 +126,9 @@
       <label><input type="checkbox" data-mod="stem" checked> Stem morphology + sub-word guard</label>
     </div>
     <div class="sliders">
-      <label>κ<sub>boundary</sub> <output id="o-kappa">1.5</output><input type="range" id="s-kappa" min="0.5" max="3.5" step="0.1" value="1.5"></label>
-      <label>γ<sub>unembed</sub> <output id="o-gamma">1.5</output><input type="range" id="s-gamma" min="0" max="3" step="0.1" value="1.5"></label>
-      <label>β<sub>attn</sub> <output id="o-beta">0.5</output><input type="range" id="s-beta" min="0" max="2" step="0.05" value="0.5"></label>
+      <label for="s-kappa"><span>κ<sub>boundary</sub></span> <output id="o-kappa" for="s-kappa" aria-hidden="true">1.5</output><input type="range" id="s-kappa" min="0.5" max="3.5" step="0.1" value="1.5"></label>
+      <label for="s-gamma"><span>γ<sub>unembed</sub></span> <output id="o-gamma" for="s-gamma" aria-hidden="true">1.5</output><input type="range" id="s-gamma" min="0" max="3" step="0.1" value="1.5"></label>
+      <label for="s-beta"><span>β<sub>attn</sub></span> <output id="o-beta" for="s-beta" aria-hidden="true">0.5</output><input type="range" id="s-beta" min="0" max="2" step="0.05" value="0.5"></label>
     </div>
     <div class="drawer-actions">
       <button class="btn ghost" id="reset-v23">Reset to v2.3 demo</button>
@@ -138,7 +140,7 @@
 </section>
 
 <!-- ============================ ECONOMICS ============================ -->
-<section class="view" id="view-economics">
+<section class="view" id="view-economics" role="tabpanel" aria-labelledby="tab-economics">
   <div class="eco-intro">
     <h1>The alignment tax</h1>
     <p>How far each way of getting assistant behaviour moves the frozen base model's next-token distribution on clean assistant text, against what it buys on the 40-prompt benchmark. All numbers are read from <code>results/</code>.</p>
@@ -149,16 +151,17 @@
       <div class="panel-head">
         <b>Composite vs. clean-token KL</b>
         <div class="panel-controls">
-          <select id="kl-pool" class="mini-select">
+          <select id="kl-pool" class="mini-select" aria-label="KL prompt pool">
             <option value="heldout_no_negation">held-out, no-negation prompts</option>
             <option value="heldout_all">held-out, all prompts</option>
             <option value="calibration_no_negation">calibration, no-negation</option>
             <option value="calibration_all">calibration, all</option>
           </select>
-          <div class="seg small" id="budget-switch"><button data-b="160">160 tok</button><button data-b="512" class="on">512 tok</button></div>
+          <div class="seg small" id="budget-switch" role="group" aria-label="Composite token budget"><button type="button" data-b="160" aria-pressed="false">160 tok</button><button type="button" data-b="512" class="on" aria-pressed="true">512 tok</button></div>
         </div>
       </div>
       <div id="scatter" class="chart"></div>
+      <div class="chart-key" id="scatter-key"></div>
       <p class="caption" id="scatter-note"></p>
     </div>
     <div class="panel glass">
@@ -175,31 +178,35 @@
   <div class="panel glass">
     <div class="panel-head"><b>Ablation waterfall: Composite gain over the raw base</b>
       <div class="panel-controls">
-        <div class="seg small" id="wf-sort"><button data-s="order" class="on">by phase</button><button data-s="score">by score</button></div>
+        <div class="seg small" id="wf-sort" role="group" aria-label="Waterfall row order"><button type="button" data-s="order" class="on" aria-pressed="true">by phase</button><button type="button" data-s="score" aria-pressed="false">by score</button></div>
       </div>
     </div>
     <div id="waterfall" class="chart"></div>
     <p class="caption" id="wf-note"></p>
+    <p class="caption tbl-cap">Per-condition breakdown · click a column header to sort · category cells: shade ∝ score, 60→100</p>
     <div class="table-wrap"><table class="data sortable" id="ab-table"></table></div>
   </div>
 </section>
 
 <!-- ============================ BROWSER ============================ -->
-<section class="view" id="view-browser">
+<section class="view" id="view-browser" role="tabpanel" aria-labelledby="tab-browser">
   <div class="br-controls glass">
-    <div class="seg small" id="tag-switch"></div>
-    <div class="cat-chips" id="cat-chips"></div>
+    <div class="seg small" id="tag-switch" role="group" aria-label="Logged run set"></div>
+    <div class="cat-chips" id="cat-chips" role="group" aria-label="Prompt category"></div>
     <label class="chk"><input type="checkbox" id="only-disagree"> only where the selected conditions disagree</label>
-    <input class="input search" id="br-search" placeholder="search prompts…">
+    <input class="input search" id="br-search" placeholder="search prompts…" aria-label="Search prompts">
   </div>
-  <div class="cond-chips glass" id="cond-chips"></div>
+  <div class="cond-chips glass" id="cond-chips" role="group" aria-label="Conditions shown"></div>
   <div class="br-body">
-    <div class="br-list" id="br-list"></div>
+    <div class="br-side">
+      <div class="br-key hint"><span>Squares follow the chip order</span><span><span class="oc pass"></span> filled = 100%</span><span><span class="oc part"></span> half = ≥75%</span><span><span class="oc fail"></span> hollow = &lt;75%</span></div>
+      <div class="br-list" id="br-list"></div>
+    </div>
     <div class="br-detail" id="br-detail"><div class="empty">Select a prompt.</div></div>
   </div>
 </section>
 </main>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-atomic="true"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>
